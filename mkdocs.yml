@@ -1,0 +1,65 @@
+site_name: GUM Documentation
+site_description: Documentation for the GUM (General User Models) project
+site_author: GUM Team
+repo_url: https://github.com/generalusermodels/gum
+repo_name: gum
+copyright: With inspiration from DSPy docs
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+    - search.share
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - footnotes
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            docstring_options:
+              trim_doctest_flags: true
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            show_if_no_docstring: true
+            show_signature_annotations: true
+            heading_level: 2
+            merge_init_into_class: true
+
+nav:
+  - Getting Started: index.md
+  - Tutorials:
+    - Model Context Protocol: tutorials/mcp.md
+    - A Proactive Assistant (GUMBO): tutorials/gumbo.md
+    - Slackbot: tutorials/slackbot.md
+    - Reflection: tutorials/reflection.md
+  - API Reference:
+    - Core API: api-reference/core.md
+    - Models: api-reference/models.md
+    - Observers: api-reference/observers.md
