@@ -10,10 +10,12 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
+import asyncio
 
 from .db_utils import search_propositions_bm25, search_observations_bm25, get_related_propositions
 from .models import Observation, Proposition
 from .prompts.gum import NOTIFICATION_DECISION_PROMPT
+from .adaptive_nudge import ObservationWindowManager
 import re
 
 
@@ -60,6 +62,10 @@ class GUMNotifier:
         self.decisions_log: List[Dict[str, Any]] = []
         self.contexts_file = Path(f"notification_contexts_{user_name.lower().replace(' ', '_')}.json")
         self.decisions_file = Path(f"notification_decisions_{user_name.lower().replace(' ', '_')}.json")
+        
+        # Initialize Adaptive Nudge Engine
+        self.observation_manager = ObservationWindowManager(user_name)
+        self.adaptive_nudge_enabled = True  # Can be controlled via environment variable
         
         # Load existing contexts if available
         self._load_notification_log()
@@ -450,6 +456,31 @@ class GUMNotifier:
                             'urgency': decision.urgency_score,
                             'impact': decision.impact_score
                         })
+                        
+                        # ADAPTIVE NUDGE ENGINE: Start observation window
+                        if self.adaptive_nudge_enabled:
+                            try:
+                                nudge_data = {
+                                    'user_context': {
+                                        'observation_content': context.observation_content,
+                                        'generated_propositions': context.generated_propositions,
+                                        'similar_propositions': context.similar_propositions,
+                                        'similar_observations': context.similar_observations,
+                                        'relevance_score': decision.relevance_score,
+                                        'urgency_score': decision.urgency_score,
+                                        'impact_score': decision.impact_score
+                                    },
+                                    'nudge_content': decision.notification_message,
+                                    'nudge_type': decision.notification_type,
+                                    'observation_duration': 180  # 3 minutes
+                                }
+                                
+                                # Start observation window asynchronously
+                                asyncio.create_task(self.observation_manager.start_observation(nudge_data))
+                                self.logger.info("Started adaptive nudge observation window")
+                                
+                            except Exception as e:
+                                self.logger.error(f"Error starting adaptive nudge observation: {e}")
                     else:
                         print(f"\n❌ No notification sent")
                         print(f"{'='*60}\n")
@@ -475,3 +506,55 @@ class GUMNotifier:
             if context.observation_id == observation_id:
                 return context
         return None
+    
+    # ADAPTIVE NUDGE ENGINE METHODS
+    
+    def get_adaptive_nudge_statistics(self) -> Dict[str, Any]:
+        """Get statistics about the adaptive nudge engine."""
+        if not self.adaptive_nudge_enabled:
+            return {"enabled": False}
+        
+        try:
+            obs_stats = self.observation_manager.get_statistics()
+            training_stats = self.observation_manager.training_logger.get_statistics()
+            
+            return {
+                "enabled": True,
+                "active_observations": obs_stats,
+                "training_data": training_stats
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting adaptive nudge statistics: {e}")
+            return {"enabled": True, "error": str(e)}
+    
+    def enable_adaptive_nudge(self) -> None:
+        """Enable the adaptive nudge engine."""
+        self.adaptive_nudge_enabled = True
+        self.logger.info("Adaptive nudge engine enabled")
+    
+    def disable_adaptive_nudge(self) -> None:
+        """Disable the adaptive nudge engine."""
+        self.adaptive_nudge_enabled = False
+        self.logger.info("Adaptive nudge engine disabled")
+    
+    def get_active_observations(self) -> Dict[str, Any]:
+        """Get currently active observations."""
+        if not self.adaptive_nudge_enabled:
+            return {}
+        
+        try:
+            return self.observation_manager.get_active_observations()
+        except Exception as e:
+            self.logger.error(f"Error getting active observations: {e}")
+            return {}
+    
+    def cancel_observation(self, nudge_id: str) -> bool:
+        """Cancel an active observation."""
+        if not self.adaptive_nudge_enabled:
+            return False
+        
+        try:
+            return self.observation_manager.cancel_observation(nudge_id)
+        except Exception as e:
+            self.logger.error(f"Error cancelling observation {nudge_id}: {e}")
+            return False

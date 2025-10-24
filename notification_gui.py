@@ -17,6 +17,29 @@ class NotificationGUI:
     """GUI for displaying GUM notifications with tabs."""
     
     def __init__(self, user_name: str = "demo_user"):
+        """
+        Initialize the GUM Notification GUI.
+        
+        Creates a Tkinter-based GUI for visualizing notification decisions made by the GUM system.
+        The GUI monitors JSON files created by the notification system and displays them in real-time.
+        
+        Args:
+            user_name (str): Name of the user being monitored. Used to construct file paths for
+                           notification data files. Defaults to "demo_user".
+                           
+        Attributes:
+            user_name (str): The name of the user being monitored
+            contexts_file (Path): Path to notification contexts JSON file
+            decisions_file (Path): Path to notification decisions JSON file  
+            last_count (int): Number of decisions processed in last refresh
+            sent_count (int): Number of notifications actually sent
+            contexts_displayed (int): Number of contexts displayed in GUI
+            root (tk.Tk): Main Tkinter window
+            notebook (ttk.Notebook): Tab container for different views
+            decisions_frame (tk.Frame): Container for decision widgets
+            status_label (tk.Label): Status display widget
+            count_label (tk.Label): Counter display widget
+        """
         self.user_name = user_name
         self.contexts_file = Path(f"notification_contexts_{user_name.lower().replace(' ', '_')}.json")
         self.decisions_file = Path(f"notification_decisions_{user_name.lower().replace(' ', '_')}.json")
@@ -32,7 +55,16 @@ class NotificationGUI:
         self._setup_ui()
     
     def _setup_ui(self):
-        """Set up the UI."""
+        """
+        Set up the complete UI layout for the notification GUI.
+        
+        Creates the main interface with:
+        - Header with title and branding
+        - Status display showing current system state
+        - Tabbed interface for different data views
+        - Control buttons for manual refresh
+        - Counter display for statistics
+        """
         # Header
         header = tk.Frame(self.root, bg="#2c3e50", height=60)
         header.pack(fill=tk.X)
@@ -125,7 +157,33 @@ class NotificationGUI:
         scrollbar.pack(side="right", fill="y")
     
     def add_decision(self, decision_data: dict):
-        """Add a notification decision to Tab 1."""
+        """
+        Add a notification decision widget to the decisions tab.
+        
+        Creates a comprehensive display widget for each notification decision made by the GUM system.
+        The widget shows decision metadata, reasoning, and context in a visually organized format.
+        
+        Args:
+            decision_data (dict): Dictionary containing decision information with keys:
+                - should_notify (bool): Whether notification was sent
+                - timestamp (str): ISO timestamp of the decision
+                - notification_type (str): Type of notification (focus, break, habit, etc.)
+                - relevance_score (float): Relevance score 1-10
+                - urgency_score (float): Urgency score 1-10  
+                - impact_score (float): Impact score 1-10
+                - reasoning (str): LLM reasoning for the decision
+                - notification_message (str): Message sent (if any)
+                - observation_content (str): Original observation text
+                - generated_propositions_count (int): Number of propositions generated
+                - similar_propositions_count (int): Number of similar propositions found
+                - similar_observations_count (int): Number of similar observations found
+                
+        Visual Design:
+        - Green header for sent notifications, gray for not sent
+        - Color-coded score display with emoji indicators
+        - Scrollable text areas for long content
+        - Responsive layout with proper text wrapping
+        """
         should_notify = decision_data.get('should_notify', False)
         
         # Determine color based on decision
@@ -341,7 +399,33 @@ class NotificationGUI:
         self.sent_count = 0
 
     def refresh(self):
-        """Refresh - load new notifications."""
+        """
+        Refresh the GUI by loading new notification data from JSON files.
+        
+        This is the core data loading function that:
+        1. Reads the decisions JSON file created by the notification system
+        2. Compares current count with last known count to detect new decisions
+        3. Clears existing widgets and reloads all data in reverse chronological order
+        4. Updates counters and status displays
+        5. Handles file I/O errors gracefully
+        
+        The refresh process is designed to be idempotent - running it multiple times
+        with the same data will produce the same result. New data is detected by
+        comparing the length of the decisions array.
+        
+        Data Flow:
+        - Reads from notification_decisions_{user_name}.json
+        - Parses JSON array of decision objects
+        - Creates GUI widgets for each decision
+        - Updates statistics counters
+        - Shows error messages for file I/O issues
+        
+        Error Handling:
+        - Catches JSON parsing errors
+        - Handles missing files gracefully
+        - Updates status display with error messages
+        - Continues operation even if individual files fail
+        """
         # Check for new decisions
         if self.decisions_file.exists():
             try:
@@ -386,19 +470,75 @@ class NotificationGUI:
             self.status_label.config(text="Waiting for notification files...", fg="#e67e22")
     
     def auto_refresh(self):
-        """Auto-refresh every 3 seconds."""
+        """
+        Set up automatic refresh of the GUI every 3 seconds.
+        
+        This method creates a recursive timer that:
+        1. Calls the refresh() method to load new data
+        2. Schedules itself to run again in 3 seconds
+        3. Continues indefinitely until the GUI is closed
+        
+        The auto-refresh ensures the GUI stays synchronized with the notification
+        system without requiring manual intervention. The 3-second interval provides
+        a good balance between responsiveness and system resource usage.
+        
+        Implementation:
+        - Uses Tkinter's after() method for non-blocking timer
+        - Recursive call pattern for continuous operation
+        - No cleanup needed - timer stops when window closes
+        """
         self.refresh()
         self.root.after(3000, self.auto_refresh)
     
     def run(self):
-        """Start the GUI."""
+        """
+        Start the GUI application and begin the main event loop.
+        
+        This method initializes the GUI and starts the Tkinter main loop:
+        1. Performs initial data refresh to load existing notifications
+        2. Starts the auto-refresh timer for continuous updates
+        3. Enters the Tkinter main loop (blocking call)
+        
+        The main loop handles all user interactions, window events, and timer
+        callbacks until the application is closed. This is the entry point for
+        the GUI application.
+        
+        Lifecycle:
+        - Initial refresh loads any existing notification data
+        - Auto-refresh timer starts for continuous updates
+        - Main loop runs until window is closed
+        - All cleanup is handled automatically by Tkinter
+        """
         self.refresh()
         self.auto_refresh()
         self.root.mainloop()
 
 
 def main():
-    """Main entry point."""
+    """
+    Main entry point for the GUM Notification GUI application.
+    
+    This function handles command-line arguments, user input, and application startup:
+    1. Parses command-line arguments for user name
+    2. Prompts for user name if not provided
+    3. Displays startup information and instructions
+    4. Creates and runs the GUI application
+    
+    Command Line Usage:
+        python notification_gui.py [user_name]
+        
+    If no user_name is provided, the application will prompt for input.
+    The user_name is used to construct file paths for notification data files.
+    
+    Prerequisites:
+    - GUM system must be running with --enable-notifications flag
+    - Notification system must be creating JSON files
+    - Proper API keys must be configured for the GUM system
+    
+    Example:
+        python notification_gui.py "John Doe"
+        # Watches for files: notification_decisions_john_doe.json
+    """
     import sys
     
     print("GUM Notification GUI")
