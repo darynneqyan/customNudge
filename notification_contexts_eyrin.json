@@ -1,0 +1,15 @@
+[
+  {
+    "timestamp": "2025-10-23T23:33:00",
+    "observation_id": 999,
+    "observation_content": "User is working on coding project",
+    "generated_propositions": [
+      {
+        "text": "User is focused on coding",
+        "confidence": 8
+      }
+    ],
+    "similar_propositions": [],
+    "similar_observations": []
+  }
+]

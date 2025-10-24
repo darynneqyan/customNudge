@@ -134,7 +134,11 @@ class SystemStateCapture:
                 self.logger.debug(f"Window title: {title}")
                 return title
             else:
-                self.logger.warning(f"Could not get window title: {result.stderr}")
+                # Handle common macOS privacy errors gracefully
+                if "Can't get frontmost of window" in result.stderr or "-1728" in result.stderr:
+                    self.logger.info("Window title access blocked by macOS privacy settings - continuing without window title")
+                else:
+                    self.logger.warning(f"Could not get window title: {result.stderr}")
                 return None
                 
         except subprocess.TimeoutExpired:

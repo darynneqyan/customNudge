@@ -35,8 +35,8 @@ class LLMJudge:
         self.logger = logging.getLogger("gum.adaptive_nudge.llm_judge")
         
         # Use environment variables or defaults
-        model = model or os.getenv("JUDGE_MODEL", "gpt-4o-mini")
-        api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GUM_LM_API_KEY")
+        model = model or os.getenv("JUDGE_MODEL", "gemini-2.5-flash")
+        api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GUM_LM_API_KEY")
         
         # Initialize LLM provider
         self.provider = create_provider(

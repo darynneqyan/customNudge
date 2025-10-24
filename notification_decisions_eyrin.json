@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2025-10-23T23:33:00",
+    "should_notify": true,
+    "notification_message": "Take a 5-minute break from coding to rest your eyes",
+    "notification_type": "break",
+    "relevance_score": 8,
+    "urgency_score": 7,
+    "impact_score": 6,
+    "reasoning": "User has been coding for extended period, break recommended"
+  }
+]

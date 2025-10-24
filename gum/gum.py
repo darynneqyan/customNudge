@@ -113,7 +113,7 @@ class gum:
 
         self.provider = create_provider(
             model=model,
-            api_key=api_key or os.getenv("GUM_LM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GOOGLE_API_KEY"),
+            api_key=api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GUM_LM_API_KEY") or os.getenv("OPENAI_API_KEY"),
             api_base=api_base or os.getenv("GUM_LM_API_BASE")
         )
         
