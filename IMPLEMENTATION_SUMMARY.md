@@ -3,50 +3,61 @@
 ## Branch: `eyrin`
 
 ## Overview
-Successfully implemented the Adaptive Nudge Engine as a modular extension to the existing GUM system. The engine learns personalized notification policies through implicit feedback loops, replacing explicit feedback buttons with intelligent observation of user behavior.
+Complete adaptive nudge system with batch processing, native notifications, and learning capabilities. System monitors user behavior, generates intelligent nudges, and learns effectiveness through implicit feedback.
 
-## Implementation
+## Core Architecture
 
-### New Module Structure (`gum/adaptive_nudge/`)
-- `state_capture.py` - System state capture (macOS)
-- `observation_window.py` - 3-minute observation management  
-- `llm_judge.py` - LLM effectiveness evaluation
-- `training_logger.py` - Training data logging (JSONL)
+### Batch Processing System
+- **ObservationBatcher**: Persistent SQLite queue with configurable batch sizes (min=3, max=10)
+- **Processing Loop**: Event-driven batch processing triggered when queue reaches minimum size
+- **API Optimization**: Reduces API calls by processing multiple observations together
 
-### Integration Points
-- **Primary**: `gum/notifier.py` lines 460-483 - triggers observation windows after nudge delivery
-- **Seamless**: Maintains backward compatibility with existing notification system
-- **Non-blocking**: Uses async tasks for observation management
+### Notification Engine
+- **LLM Decision Making**: Uses gemini-2.5-flash for intelligent notification decisions
+- **Native macOS Notifications**: Displays actual system notifications with custom titles/icons
+- **Context Analysis**: BM25 similarity search across propositions and observations
+- **Adaptive Learning**: 3-minute observation windows to evaluate nudge effectiveness
 
-### Key Features
-- **Structured State Capture**: Uses macOS AppleScript to capture apps, browser tabs, open files, clipboard
-- **LLM Judge**: Specialized prompt for impartial effectiveness evaluation (0/1 scoring)
-- **Training Data**: JSONL format for future ML policy development
-- **Modular Design**: Easy testing and maintenance of individual components
+### Adaptive Nudge Components
+- **SystemStateCapture**: macOS AppleScript integration for app/tab/file detection
+- **LLMJudge**: Effectiveness evaluation with 0/1 scoring and reasoning
+- **TrainingDataLogger**: JSONL format for future ML policy development
+- **ObservationWindowManager**: Async 3-minute post-nudge monitoring
 
 ## Execution Flow
-```
-1. GUM sends nudge → 2. Start 3-min observation → 3. User acts/ignores → 
-4. Capture system state → 5. LLM evaluates effectiveness → 6. Log training data
-```
+1. Screen Observer captures activity every few seconds
+2. Observations accumulate in persistent queue until batch size reached
+3. Batch processing generates propositions using gemini-2.5-flash
+4. Notification engine analyzes context and makes LLM-based decisions
+5. Native macOS notifications display with appropriate titles/icons
+6. Adaptive nudge engine starts 3-minute observation window
+7. System state captured and LLM evaluates nudge effectiveness
+8. Training data logged for continuous learning
+
+## API Integration
+- **Primary Model**: gemini-2.5-flash for all proposition generation and decisions
+- **Judge Model**: gemini-2.5-flash for effectiveness evaluation
+- **API Key**: GOOGLE_API_KEY environment variable
+- **Provider**: GeminiProvider handles all API calls with error handling
 
 ## Configuration
 ```bash
-export GOOGLE_API_KEY="your-google-api-key"
-export JUDGE_MODEL="gemini-2.5-flash"
-python -m gum.cli -u "Your Name" --enable-notifications --model "gemini-1.5-pro"
+export GOOGLE_API_KEY="your-api-key"
+python -m gum.cli -u "User Name" --enable-notifications --model "gemini-2.5-flash" --min-batch-size 3 --max-batch-size 10
 ```
 
+## Outputs
+- **Native Notifications**: macOS system notifications with contextual titles
+- **Training Data**: JSONL logs of nudge effectiveness for ML development
+- **Decision Logs**: JSON files tracking notification decisions and reasoning
+- **Context Data**: Detailed observation and proposition analysis
+
 ## Status
-- ✅ **System State Capture**: Working (Cursor, 18 browser tabs, 96 recent apps)
-- ✅ **LLM Judge**: Working with Google Gemini
-- ✅ **Training Data Logging**: Ready to log effectiveness data
-- ✅ **GUM Integration**: Automatic observation window triggering
-- ✅ **Error Handling**: Graceful handling of macOS privacy restrictions
+Fully operational system with batch processing, native notifications, and adaptive learning. System successfully processes observations, generates intelligent nudges, displays notifications, and learns from user responses.
 
-## Files Created/Modified
-- **New**: `gum/adaptive_nudge/` (4 modules)
-- **Modified**: `gum/notifier.py` (added adaptive nudge integration)
-- **Documentation**: `ADAPTIVE_NUDGE_ENGINE_EXECUTION_PLAN.md`
-
-The Adaptive Nudge Engine is fully operational and ready to learn personalized notification policies through implicit feedback.
+## Files Modified
+- **gum/batcher.py**: Fixed path expansion and race condition issues
+- **gum/gum.py**: Corrected initialization order and standardized API calls
+- **gum/notifier.py**: Added native notification display and adaptive nudge integration
+- **gum/cli.py**: Standardized model to gemini-2.5-flash
+- **gum/adaptive_nudge/llm_judge.py**: Standardized API configuration

@@ -99,11 +99,6 @@ class gum:
             h = logging.StreamHandler()
             h.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
             self.logger.addHandler(h)
-
-        if enable_notifications:
-            from .notifier import GUMNotifier
-            self.notifier = GUMNotifier(user_name, gum_instance=self)
-            self.logger.info("Notifications enabled")
         
         # prompts
         self.propose_prompt = propose_prompt or PROPOSE_PROMPT
@@ -112,13 +107,19 @@ class gum:
         self.audit_prompt = audit_prompt or AUDIT_PROMPT
 
         self.provider = create_provider(
-            model=model,
-            api_key=api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GUM_LM_API_KEY") or os.getenv("OPENAI_API_KEY"),
-            api_base=api_base or os.getenv("GUM_LM_API_BASE")
+            model="gemini-2.5-flash",
+            api_key=api_key or os.getenv("GOOGLE_API_KEY"),
+            api_base=api_base
         )
         
+        # Initialize notifier after provider is created
+        if enable_notifications:
+            from .notifier import GUMNotifier
+            self.notifier = GUMNotifier(user_name, gum_instance=self)
+            self.logger.info("Notifications enabled")
+        
         # Log provider information for debugging
-        self.logger.info(f"Using model: {model}")
+        self.logger.info(f"Using model: gemini-2.5-flash")
         self.logger.info(f"Provider: {type(self.provider).__name__}")
 
         self.engine = None
@@ -183,11 +184,12 @@ class gum:
             gum: The instance of the gum class.
         """
         await self.connect_db()
-        self.start_update_loop()
         
         # Start batcher if enabled
         if self.batcher:
             await self.batcher.start()
+            
+        self.start_update_loop()
             
         return self
 

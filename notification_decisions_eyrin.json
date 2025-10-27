@@ -1,12 +1,32 @@
 [
   {
-    "timestamp": "2025-10-23T23:33:00",
+    "timestamp": "2025-10-26T18:24:23.928375",
+    "observation_id": 18960204,
     "should_notify": true,
-    "notification_message": "Take a 5-minute break from coding to rest your eyes",
+    "relevance_score": 10.0,
+    "urgency_score": 8.0,
+    "impact_score": 9.0,
+    "reasoning": "The generated proposition strongly indicates Eyrin uses an automated assistant specifically for prompting breaks from extended coding sessions, suggesting a self-identified need to improve this habit. Assuming the current (failed) observation relates to Eyrin being in such a session, a timely break reminder is highly relevant, actionable, and aligns with Eyrin's stated goal for productivity and well-being. There are no recent similar notifications.",
+    "notification_message": "Deep focus! A quick break helps reset. You've earned it!",
     "notification_type": "break",
-    "relevance_score": 8,
-    "urgency_score": 7,
-    "impact_score": 6,
-    "reasoning": "User has been coding for extended period, break recommended"
+    "observation_content": "[transcription failed: Google API key is required for Gemini models. Set GOOGLE_API_KEY environment variable.][summary failed: Google API key is required for Gemini models. Set GOOGLE_API_KEY environm...",
+    "generated_propositions_count": 11,
+    "similar_propositions_count": 12,
+    "similar_observations_count": 5
+  },
+  {
+    "timestamp": "2025-10-26T18:35:00.000000",
+    "observation_id": 999999,
+    "should_notify": true,
+    "relevance_score": 9.0,
+    "urgency_score": 8.0,
+    "impact_score": 9.0,
+    "reasoning": "Test notification to verify display functionality",
+    "notification_message": "Test: Your adaptive nudge system is working! \ud83c\udf89",
+    "notification_type": "productivity",
+    "observation_content": "Test observation",
+    "generated_propositions_count": 1,
+    "similar_propositions_count": 1,
+    "similar_observations_count": 1
   }
 ]

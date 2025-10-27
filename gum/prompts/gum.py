@@ -207,6 +207,9 @@ Your goal is to help {user_name} change behaviors they want to improve by sendin
 ## Recent Notification History
 {notification_history}
 
+## Learning from Previous Actions
+{learning_context}
+
 # Decision Criteria
 
 Consider these factors when deciding whether to notify:
@@ -216,6 +219,22 @@ Consider these factors when deciding whether to notify:
 3. **Actionability**: Can {user_name} act on this notification right now?
 4. **Novelty**: Is this different enough from recent notifications to be valuable?
 5. **Impact**: Could this notification actually influence behavior change?
+6. **Learning**: What have previous similar notifications taught us about effectiveness?
+
+# Adaptive Learning Guidelines
+
+**Learn from previous actions:**
+- If previous similar notifications were effective (judge_score=1), consider similar timing/content
+- If previous similar notifications were ineffective (judge_score=0), try different approach or timing
+- Adjust notification frequency based on user responsiveness patterns
+- Consider user's context changes since last notification
+- Adapt message tone/style based on what worked before
+
+**Effectiveness patterns to consider:**
+- Break notifications during coding sessions
+- Focus notifications during distraction periods  
+- Habit reminders at optimal times
+- Health notifications during sedentary periods
 
 # Notification Guidelines
 
@@ -225,6 +244,7 @@ Consider these factors when deciding whether to notify:
 - Timing is appropriate (not during deep work, important meetings, etc.)
 - Notification offers clear, actionable guidance
 - It's been a while since last similar notification
+- Previous similar notifications were effective OR you're trying a new approach
 
 **DON'T notify when:**
 - User is in focused work state
@@ -232,6 +252,7 @@ Consider these factors when deciding whether to notify:
 - Observation is neutral/positive behavior
 - Too many notifications sent recently (notification fatigue)
 - Message would be vague or unhelpful
+- Previous similar notifications were ineffective AND no new approach available
 
 # Task
 
@@ -240,6 +261,7 @@ Decide whether to send a notification. If yes, craft a **succinct, actionable me
 - Suggests a specific change
 - Is encouraging, not judgmental
 - Focuses on what user wants to improve
+- Learns from previous effectiveness patterns
 
 Return your decision in this exact JSON format:
 
@@ -248,12 +270,12 @@ Return your decision in this exact JSON format:
   "relevance_score": <1-10>,
   "urgency_score": <1-10>,
   "impact_score": <1-10>,
-  "reasoning": "<brief explanation for decision>",
+  "reasoning": "<brief explanation for decision, including learning insights>",
   "notification_message": "<succinct message if should_notify=true, otherwise empty string>",
   "notification_type": "<one of: 'focus', 'break', 'habit', 'health', 'productivity', 'none'>"
 }}
 
-Be conservative - only notify when there's clear value. Quality over quantity."""
+Be conservative - only notify when there's clear value. Quality over quantity. Learn from every interaction."""
 
 SIMILAR_PROMPT = """You will label sets of propositions based on how similar they are to eachother.
 

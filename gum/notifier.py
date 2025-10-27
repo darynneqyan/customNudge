@@ -11,6 +11,7 @@ from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
 import asyncio
+import subprocess
 
 from .db_utils import search_propositions_bm25, search_observations_bm25, get_related_propositions
 from .models import Observation, Proposition
@@ -90,6 +91,70 @@ class GUMNotifier:
                 json.dump(data, f, indent=2)
         except Exception as e:
             self.logger.error(f"Error saving notification log: {e}")
+    
+    def _get_learning_context(self, notification_type: str = None) -> str:
+        """Extract learning insights from training data for similar notification types."""
+        try:
+            from .adaptive_nudge.training_logger import TrainingDataLogger
+            training_logger = TrainingDataLogger(self.user_name)
+            
+            # Get recent training entries
+            recent_entries = training_logger.get_recent_entries(hours=24)
+            
+            if not recent_entries:
+                return "No recent training data available for learning."
+            
+            # Filter by notification type if specified
+            if notification_type:
+                relevant_entries = [e for e in recent_entries if e.get('nudge_type') == notification_type]
+            else:
+                relevant_entries = recent_entries
+            
+            if not relevant_entries:
+                return f"No recent {notification_type} notifications to learn from."
+            
+            # Analyze effectiveness patterns
+            effective_count = sum(1 for e in relevant_entries if e.get('judge_score') == 1)
+            ineffective_count = len(relevant_entries) - effective_count
+            effectiveness_rate = effective_count / len(relevant_entries) if relevant_entries else 0
+            
+            # Get recent patterns
+            recent_patterns = []
+            for entry in relevant_entries[-3:]:  # Last 3 entries
+                pattern = {
+                    'type': entry.get('nudge_type', 'unknown'),
+                    'effective': entry.get('judge_score') == 1,
+                    'reasoning': entry.get('judge_reasoning', '')[:100] + "..." if entry.get('judge_reasoning') else 'No reasoning',
+                    'timestamp': entry.get('timestamp', 'unknown')
+                }
+                recent_patterns.append(pattern)
+            
+            # Build learning context
+            learning_context = f"""
+**Effectiveness Analysis:**
+- Recent {notification_type or 'all'} notifications: {len(relevant_entries)}
+- Effective: {effective_count} ({effectiveness_rate:.1%})
+- Ineffective: {ineffective_count}
+
+**Recent Patterns:**
+"""
+            for pattern in recent_patterns:
+                status = "✅ Effective" if pattern['effective'] else "❌ Ineffective"
+                learning_context += f"- [{pattern['timestamp']}] {pattern['type']}: {status}\n  Reasoning: {pattern['reasoning']}\n"
+            
+            # Add recommendations
+            if effectiveness_rate < 0.3:
+                learning_context += "\n**Learning Insight:** Low effectiveness rate suggests need for different approach or timing."
+            elif effectiveness_rate > 0.7:
+                learning_context += "\n**Learning Insight:** High effectiveness rate - continue similar approach."
+            else:
+                learning_context += "\n**Learning Insight:** Mixed results - consider context-specific adjustments."
+            
+            return learning_context.strip()
+            
+        except Exception as e:
+            self.logger.error(f"Error getting learning context: {e}")
+            return "Unable to retrieve learning context from training data."
     
     def _save_decision(self, context: NotificationContext, decision: NotificationDecision):
         """Save a notification decision to separate file for GUI."""
@@ -278,6 +343,9 @@ class GUMNotifier:
             for n in recent_notifs
         ]) if recent_notifs else "No recent notifications"
         
+        # Get learning context from training data
+        learning_context = self._get_learning_context()
+        
         # Construct prompt
         prompt = NOTIFICATION_DECISION_PROMPT.format(
             user_name=self.user_name,
@@ -285,7 +353,8 @@ class GUMNotifier:
             generated_propositions=gen_props_text,
             similar_propositions=sim_props_text,
             similar_observations=sim_obs_text,
-            notification_history=notif_history_text
+            notification_history=notif_history_text,
+            learning_context=learning_context
         )
         
         try:
@@ -447,6 +516,9 @@ class GUMNotifier:
                         print(f"{decision.notification_message}")
                         print(f"{'='*60}\n")
                         
+                        # Display native macOS notification
+                        self._display_notification(decision.notification_message, decision.notification_type)
+                        
                         # Track sent notification
                         self.sent_notifications.append({
                             'timestamp': context.timestamp,
@@ -495,6 +567,41 @@ class GUMNotifier:
         # Save all contexts to file
         self._save_notification_log()
         self.logger.info(f"Saved notification contexts to {self.log_file}")
+    
+    def _display_notification(self, message: str, notification_type: str):
+        """Display a native macOS notification."""
+        try:
+            # Escape quotes in the message
+            escaped_message = message.replace('"', '\\"')
+            
+            # Customize title based on notification type
+            title_map = {
+                'break': '⏰ Break Reminder',
+                'focus': '🎯 Focus Nudge', 
+                'productivity': '⚡ Productivity Tip',
+                'habit': '🔄 Habit Reminder',
+                'health': '💚 Health Nudge',
+                'general': '🔔 GUM Nudge'
+            }
+            
+            title = title_map.get(notification_type, '🔔 GUM Nudge')
+            escaped_title = title.replace('"', '\\"')
+            
+            # Create the AppleScript command
+            script = f'''
+            display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
+            '''
+            
+            # Execute the notification
+            subprocess.run(['osascript', '-e', script], check=True, timeout=5)
+            self.logger.info(f"📢 Displayed notification: {title} - {message}")
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"❌ Failed to display notification: {e}")
+        except subprocess.TimeoutExpired:
+            self.logger.error("❌ Notification display timed out")
+        except Exception as e:
+            self.logger.error(f"❌ Error displaying notification: {e}")
     
     def get_recent_contexts(self, limit: int = 10) -> List[NotificationContext]:
         """Get the most recent notification contexts."""
