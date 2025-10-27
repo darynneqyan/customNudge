@@ -1,0 +1,956 @@
+[
+  {
+    "timestamp": "2025-10-26T21:05:31.976665",
+    "observation_content": "User opened VS Code and started coding Python",
+    "observation_id": 4,
+    "generated_propositions": [
+      {
+        "id": 6,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 7,
+        "text": "{user_name} executed a rapid application switch, moving from VS Code to a web browser to access YouTube, and then immediately back to VS Code.",
+        "reasoning": "The activity log shows a sequence: 'User opened VS Code and started coding Python', then 'User switched to browser and opened YouTube', and immediately 'User returned to VS Code and continued coding'. This specific sequence of observed actions involving VS Code, a web browser, and YouTube is direct.",
+        "confidence": 7,
+        "decay": 5,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 8,
+        "text": "The observed sequence of activities, including interaction with VS Code, a web browser, and YouTube, occurred within an extremely compressed timeframe of approximately 0.000592 seconds, suggesting a logging artifact or near-simultaneous actions rather than distinct, deliberate context switches by {user_name}.",
+        "reasoning": "All three recorded activities are timestamped within a total span of 0.000592 seconds. This indicates a 'burst' of activity where different applications (VS Code, browser/YouTube) appear almost simultaneously, highlighting the nature of the recording rather than a series of well-spaced, deliberate actions by {user_name}.",
+        "confidence": 10,
+        "decay": 6,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 3,
+        "text": "test_user likely interacts with YouTube in a peripheral or momentary capacity, rather than for deep, sustained content consumption, when engaged in a focused task.",
+        "reasoning": "After switching to the `browser` and opening `YouTube`, test_user returned to `VS Code` within a fraction of a millisecond (approximately 0.000216 seconds between opening `YouTube` and returning to `VS Code`). This extremely brief duration makes sustained viewing or active engagement with `YouTube` content highly improbable, suggesting a quick check, starting background audio, or an accidental switch.",
+        "confidence": 7,
+        "decay": 7,
+        "created_at": "2025-10-27T04:04:42"
+      },
+      {
+        "id": 4,
+        "text": "test_user demonstrates a high degree of focus on their primary coding task, swiftly re-engaging with it after very brief interruptions.",
+        "reasoning": "The immediate return to `VS Code` and the continuation of 'coding Python' after an extremely short diversion to the `browser` to open `YouTube` (totaling less than a millisecond) strongly suggests that the coding task holds priority and test_user is quick to dismiss or move past distractions to maintain focus.",
+        "confidence": 8,
+        "decay": 8,
+        "created_at": "2025-10-27T04:04:42"
+      }
+    ],
+    "similar_propositions": [
+      {
+        "id": 6,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 3,
+        "text": "test_user likely interacts with YouTube in a peripheral or momentary capacity, rather than for deep, sustained content consumption, when engaged in a focused task.",
+        "reasoning": "After switching to the `browser` and opening `YouTube`, test_user returned to `VS Code` within a fraction of a millisecond (approximately 0.000216 seconds between opening `YouTube` and returning to `VS Code`). This extremely brief duration makes sustained viewing or active engagement with `YouTube` content highly improbable, suggesting a quick check, starting background audio, or an accidental switch.",
+        "confidence": 7,
+        "decay": 7,
+        "relevance_score": 0.04343854405239287,
+        "created_at": "2025-10-27T04:04:42",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 7,
+        "text": "{user_name} executed a rapid application switch, moving from VS Code to a web browser to access YouTube, and then immediately back to VS Code.",
+        "reasoning": "The activity log shows a sequence: 'User opened VS Code and started coding Python', then 'User switched to browser and opened YouTube', and immediately 'User returned to VS Code and continued coding'. This specific sequence of observed actions involving VS Code, a web browser, and YouTube is direct.",
+        "confidence": 7,
+        "decay": 5,
+        "relevance_score": 0.002310935699464673,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 4,
+        "text": "test_user demonstrates a high degree of focus on their primary coding task, swiftly re-engaging with it after very brief interruptions.",
+        "reasoning": "The immediate return to `VS Code` and the continuation of 'coding Python' after an extremely short diversion to the `browser` to open `YouTube` (totaling less than a millisecond) strongly suggests that the coding task holds priority and test_user is quick to dismiss or move past distractions to maintain focus.",
+        "confidence": 8,
+        "decay": 8,
+        "relevance_score": 0.0022204195519004047,
+        "created_at": "2025-10-27T04:04:42",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 8,
+        "text": "The observed sequence of activities, including interaction with VS Code, a web browser, and YouTube, occurred within an extremely compressed timeframe of approximately 0.000592 seconds, suggesting a logging artifact or near-simultaneous actions rather than distinct, deliberate context switches by {user_name}.",
+        "reasoning": "All three recorded activities are timestamped within a total span of 0.000592 seconds. This indicates a 'burst' of activity where different applications (VS Code, browser/YouTube) appear almost simultaneously, highlighting the nature of the recording rather than a series of well-spaced, deliberate actions by {user_name}.",
+        "confidence": 10,
+        "decay": 6,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      }
+    ],
+    "similar_observations": [
+      {
+        "id": 4,
+        "observer_name": "Screen",
+        "content": "User opened VS Code and started coding Python",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 1.0
+      },
+      {
+        "id": 3,
+        "observer_name": "Screen",
+        "content": "## Transcription of User's Screen Content\n\n### Screenshot 1\n\n**Chrome Browser Bar (Top Left - partially visible)**\nChrome File Edit View History Bookmarks Profiles Tab Window Help\n\n**VS Code Applicati...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.9036208383191182
+      },
+      {
+        "id": 1,
+        "observer_name": "Screen",
+        "content": "```markdown\n# Screenshot 1\n\n## Top Bar\n*   **Application:** Visual Studio Code\n*   **Menu Bar:** File Edit Selection View Go Run Terminal Help\n*   **Project Name:** `customNudge`\n*   **Open Tabs:**\n  ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.8342916382621017
+      },
+      {
+        "id": 2,
+        "observer_name": "Screen",
+        "content": "```markdown\n## Screenshot 1 Transcription\n\n**Application:** Visual Studio Code (inferred from UI)\n\n**Top Bar:**\n*   `CUSTOMNUDGE`\n*   `File Edit Selection View Go Run Terminal Window Help` (partially ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.7556686368886136
+      },
+      {
+        "id": 6,
+        "observer_name": "Screen",
+        "content": "User returned to VS Code and continued coding",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 0.43021405897789355
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-10-26T21:05:42.004154",
+    "observation_content": "User switched to browser and opened YouTube",
+    "observation_id": 5,
+    "generated_propositions": [
+      {
+        "id": 6,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 7,
+        "text": "{user_name} executed a rapid application switch, moving from VS Code to a web browser to access YouTube, and then immediately back to VS Code.",
+        "reasoning": "The activity log shows a sequence: 'User opened VS Code and started coding Python', then 'User switched to browser and opened YouTube', and immediately 'User returned to VS Code and continued coding'. This specific sequence of observed actions involving VS Code, a web browser, and YouTube is direct.",
+        "confidence": 7,
+        "decay": 5,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 8,
+        "text": "The observed sequence of activities, including interaction with VS Code, a web browser, and YouTube, occurred within an extremely compressed timeframe of approximately 0.000592 seconds, suggesting a logging artifact or near-simultaneous actions rather than distinct, deliberate context switches by {user_name}.",
+        "reasoning": "All three recorded activities are timestamped within a total span of 0.000592 seconds. This indicates a 'burst' of activity where different applications (VS Code, browser/YouTube) appear almost simultaneously, highlighting the nature of the recording rather than a series of well-spaced, deliberate actions by {user_name}.",
+        "confidence": 10,
+        "decay": 6,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 3,
+        "text": "test_user likely interacts with YouTube in a peripheral or momentary capacity, rather than for deep, sustained content consumption, when engaged in a focused task.",
+        "reasoning": "After switching to the `browser` and opening `YouTube`, test_user returned to `VS Code` within a fraction of a millisecond (approximately 0.000216 seconds between opening `YouTube` and returning to `VS Code`). This extremely brief duration makes sustained viewing or active engagement with `YouTube` content highly improbable, suggesting a quick check, starting background audio, or an accidental switch.",
+        "confidence": 7,
+        "decay": 7,
+        "created_at": "2025-10-27T04:04:42"
+      },
+      {
+        "id": 4,
+        "text": "test_user demonstrates a high degree of focus on their primary coding task, swiftly re-engaging with it after very brief interruptions.",
+        "reasoning": "The immediate return to `VS Code` and the continuation of 'coding Python' after an extremely short diversion to the `browser` to open `YouTube` (totaling less than a millisecond) strongly suggests that the coding task holds priority and test_user is quick to dismiss or move past distractions to maintain focus.",
+        "confidence": 8,
+        "decay": 8,
+        "created_at": "2025-10-27T04:04:42"
+      }
+    ],
+    "similar_propositions": [
+      {
+        "id": 6,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 3,
+        "text": "test_user likely interacts with YouTube in a peripheral or momentary capacity, rather than for deep, sustained content consumption, when engaged in a focused task.",
+        "reasoning": "After switching to the `browser` and opening `YouTube`, test_user returned to `VS Code` within a fraction of a millisecond (approximately 0.000216 seconds between opening `YouTube` and returning to `VS Code`). This extremely brief duration makes sustained viewing or active engagement with `YouTube` content highly improbable, suggesting a quick check, starting background audio, or an accidental switch.",
+        "confidence": 7,
+        "decay": 7,
+        "relevance_score": 0.04344375043924645,
+        "created_at": "2025-10-27T04:04:42",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 7,
+        "text": "{user_name} executed a rapid application switch, moving from VS Code to a web browser to access YouTube, and then immediately back to VS Code.",
+        "reasoning": "The activity log shows a sequence: 'User opened VS Code and started coding Python', then 'User switched to browser and opened YouTube', and immediately 'User returned to VS Code and continued coding'. This specific sequence of observed actions involving VS Code, a web browser, and YouTube is direct.",
+        "confidence": 7,
+        "decay": 5,
+        "relevance_score": 0.002317913858436322,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 4,
+        "text": "test_user demonstrates a high degree of focus on their primary coding task, swiftly re-engaging with it after very brief interruptions.",
+        "reasoning": "The immediate return to `VS Code` and the continuation of 'coding Python' after an extremely short diversion to the `browser` to open `YouTube` (totaling less than a millisecond) strongly suggests that the coding task holds priority and test_user is quick to dismiss or move past distractions to maintain focus.",
+        "confidence": 8,
+        "decay": 8,
+        "relevance_score": 0.0022097598302146656,
+        "created_at": "2025-10-27T04:04:42",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 8,
+        "text": "The observed sequence of activities, including interaction with VS Code, a web browser, and YouTube, occurred within an extremely compressed timeframe of approximately 0.000592 seconds, suggesting a logging artifact or near-simultaneous actions rather than distinct, deliberate context switches by {user_name}.",
+        "reasoning": "All three recorded activities are timestamped within a total span of 0.000592 seconds. This indicates a 'burst' of activity where different applications (VS Code, browser/YouTube) appear almost simultaneously, highlighting the nature of the recording rather than a series of well-spaced, deliberate actions by {user_name}.",
+        "confidence": 10,
+        "decay": 6,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      }
+    ],
+    "similar_observations": [
+      {
+        "id": 5,
+        "observer_name": "Screen",
+        "content": "User switched to browser and opened YouTube",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 1.0
+      },
+      {
+        "id": 3,
+        "observer_name": "Screen",
+        "content": "## Transcription of User's Screen Content\n\n### Screenshot 1\n\n**Chrome Browser Bar (Top Left - partially visible)**\nChrome File Edit View History Bookmarks Profiles Tab Window Help\n\n**VS Code Applicati...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.3545053744016212
+      },
+      {
+        "id": 1,
+        "observer_name": "Screen",
+        "content": "```markdown\n# Screenshot 1\n\n## Top Bar\n*   **Application:** Visual Studio Code\n*   **Menu Bar:** File Edit Selection View Go Run Terminal Help\n*   **Project Name:** `customNudge`\n*   **Open Tabs:**\n  ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 3.31161994382434e-07
+      },
+      {
+        "id": 2,
+        "observer_name": "Screen",
+        "content": "```markdown\n## Screenshot 1 Transcription\n\n**Application:** Visual Studio Code (inferred from UI)\n\n**Top Bar:**\n*   `CUSTOMNUDGE`\n*   `File Edit Selection View Go Run Terminal Window Help` (partially ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 1.1970587698861834e-07
+      },
+      {
+        "id": 4,
+        "observer_name": "Screen",
+        "content": "User opened VS Code and started coding Python",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 0.0
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-10-26T21:05:52.349197",
+    "observation_content": "User returned to VS Code and continued coding",
+    "observation_id": 6,
+    "generated_propositions": [
+      {
+        "id": 6,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 7,
+        "text": "{user_name} executed a rapid application switch, moving from VS Code to a web browser to access YouTube, and then immediately back to VS Code.",
+        "reasoning": "The activity log shows a sequence: 'User opened VS Code and started coding Python', then 'User switched to browser and opened YouTube', and immediately 'User returned to VS Code and continued coding'. This specific sequence of observed actions involving VS Code, a web browser, and YouTube is direct.",
+        "confidence": 7,
+        "decay": 5,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 8,
+        "text": "The observed sequence of activities, including interaction with VS Code, a web browser, and YouTube, occurred within an extremely compressed timeframe of approximately 0.000592 seconds, suggesting a logging artifact or near-simultaneous actions rather than distinct, deliberate context switches by {user_name}.",
+        "reasoning": "All three recorded activities are timestamped within a total span of 0.000592 seconds. This indicates a 'burst' of activity where different applications (VS Code, browser/YouTube) appear almost simultaneously, highlighting the nature of the recording rather than a series of well-spaced, deliberate actions by {user_name}.",
+        "confidence": 10,
+        "decay": 6,
+        "created_at": "2025-10-27T04:05:31"
+      },
+      {
+        "id": 3,
+        "text": "test_user likely interacts with YouTube in a peripheral or momentary capacity, rather than for deep, sustained content consumption, when engaged in a focused task.",
+        "reasoning": "After switching to the `browser` and opening `YouTube`, test_user returned to `VS Code` within a fraction of a millisecond (approximately 0.000216 seconds between opening `YouTube` and returning to `VS Code`). This extremely brief duration makes sustained viewing or active engagement with `YouTube` content highly improbable, suggesting a quick check, starting background audio, or an accidental switch.",
+        "confidence": 7,
+        "decay": 7,
+        "created_at": "2025-10-27T04:04:42"
+      },
+      {
+        "id": 4,
+        "text": "test_user demonstrates a high degree of focus on their primary coding task, swiftly re-engaging with it after very brief interruptions.",
+        "reasoning": "The immediate return to `VS Code` and the continuation of 'coding Python' after an extremely short diversion to the `browser` to open `YouTube` (totaling less than a millisecond) strongly suggests that the coding task holds priority and test_user is quick to dismiss or move past distractions to maintain focus.",
+        "confidence": 8,
+        "decay": 8,
+        "created_at": "2025-10-27T04:04:42"
+      }
+    ],
+    "similar_propositions": [
+      {
+        "id": 6,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 3,
+        "text": "test_user likely interacts with YouTube in a peripheral or momentary capacity, rather than for deep, sustained content consumption, when engaged in a focused task.",
+        "reasoning": "After switching to the `browser` and opening `YouTube`, test_user returned to `VS Code` within a fraction of a millisecond (approximately 0.000216 seconds between opening `YouTube` and returning to `VS Code`). This extremely brief duration makes sustained viewing or active engagement with `YouTube` content highly improbable, suggesting a quick check, starting background audio, or an accidental switch.",
+        "confidence": 7,
+        "decay": 7,
+        "relevance_score": 0.043449120261571314,
+        "created_at": "2025-10-27T04:04:42",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 7,
+        "text": "{user_name} executed a rapid application switch, moving from VS Code to a web browser to access YouTube, and then immediately back to VS Code.",
+        "reasoning": "The activity log shows a sequence: 'User opened VS Code and started coding Python', then 'User switched to browser and opened YouTube', and immediately 'User returned to VS Code and continued coding'. This specific sequence of observed actions involving VS Code, a web browser, and YouTube is direct.",
+        "confidence": 7,
+        "decay": 5,
+        "relevance_score": 0.002325120395043761,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 4,
+        "text": "test_user demonstrates a high degree of focus on their primary coding task, swiftly re-engaging with it after very brief interruptions.",
+        "reasoning": "The immediate return to `VS Code` and the continuation of 'coding Python' after an extremely short diversion to the `browser` to open `YouTube` (totaling less than a millisecond) strongly suggests that the coding task holds priority and test_user is quick to dismiss or move past distractions to maintain focus.",
+        "confidence": 8,
+        "decay": 8,
+        "relevance_score": 0.002198757800139705,
+        "created_at": "2025-10-27T04:04:42",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 8,
+        "text": "The observed sequence of activities, including interaction with VS Code, a web browser, and YouTube, occurred within an extremely compressed timeframe of approximately 0.000592 seconds, suggesting a logging artifact or near-simultaneous actions rather than distinct, deliberate context switches by {user_name}.",
+        "reasoning": "All three recorded activities are timestamped within a total span of 0.000592 seconds. This indicates a 'burst' of activity where different applications (VS Code, browser/YouTube) appear almost simultaneously, highlighting the nature of the recording rather than a series of well-spaced, deliberate actions by {user_name}.",
+        "confidence": 10,
+        "decay": 6,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:05:31",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      }
+    ],
+    "similar_observations": [
+      {
+        "id": 6,
+        "observer_name": "Screen",
+        "content": "User returned to VS Code and continued coding",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 1.0
+      },
+      {
+        "id": 3,
+        "observer_name": "Screen",
+        "content": "## Transcription of User's Screen Content\n\n### Screenshot 1\n\n**Chrome Browser Bar (Top Left - partially visible)**\nChrome File Edit View History Bookmarks Profiles Tab Window Help\n\n**VS Code Applicati...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.3267535729640705
+      },
+      {
+        "id": 2,
+        "observer_name": "Screen",
+        "content": "```markdown\n## Screenshot 1 Transcription\n\n**Application:** Visual Studio Code (inferred from UI)\n\n**Top Bar:**\n*   `CUSTOMNUDGE`\n*   `File Edit Selection View Go Run Terminal Window Help` (partially ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 1.5477311227085622e-06
+      },
+      {
+        "id": 1,
+        "observer_name": "Screen",
+        "content": "```markdown\n# Screenshot 1\n\n## Top Bar\n*   **Application:** Visual Studio Code\n*   **Menu Bar:** File Edit Selection View Go Run Terminal Help\n*   **Project Name:** `customNudge`\n*   **Open Tabs:**\n  ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 1.5088109414085338e-06
+      },
+      {
+        "id": 4,
+        "observer_name": "Screen",
+        "content": "User opened VS Code and started coding Python",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 1.2003432180440754e-06
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-10-26T21:08:11.936344",
+    "observation_content": "User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly",
+    "observation_id": 7,
+    "generated_propositions": [
+      {
+        "id": 14,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 10,
+        "decay": 10,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 15,
+        "text": "When engaged in Python coding within VS Code, {user_name} may exhibit extremely brief, potentially unintentional, shifts to other applications like a web browser to open YouTube, but quickly returns to their primary task.",
+        "reasoning": "The sequence 'User opened VS Code and started coding Python', 'User switched to browser and opened YouTube', and 'User returned to VS Code and continued coding' occurred within an extremely compressed timeframe of approximately 0.000592 seconds. This brief duration suggests the YouTube interaction was peripheral, momentary, or possibly a logging artifact rather than a deliberate, sustained context switch, and {user_name} swiftly re-engaged with VS Code and Python coding.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 16,
+        "text": "{user_name} uses social media platforms (Twitter, Instagram, Facebook) as a sustained method of distraction and time displacement.",
+        "reasoning": "The observation 'User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly' provides direct evidence of prolonged engagement with specific platforms for distraction.",
+        "confidence": 10,
+        "decay": 9,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 17,
+        "text": "When procrastinating on important work, {user_name} gravitates towards passive, entertaining video content, such as cat videos on YouTube.",
+        "reasoning": "The observation 'User opened YouTube and started watching cat videos instead of working on their important project deadline' directly demonstrates a preference for easily digestible, entertaining video content as a means of escape from demanding tasks.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 18,
+        "text": "{user_name} is susceptible to external interruptions from notifications, which contribute to procrastination and make it difficult to maintain focus on work tasks.",
+        "reasoning": "The transcript notes that the user has been 'getting distracted by notifications' during their '2 hours' of procrastination, explicitly identifying notifications as a distraction factor influencing focus.",
+        "confidence": 8,
+        "decay": 7,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 9,
+        "text": "test_user exhibits a strong and prolonged pattern of procrastination and work avoidance, especially when facing significant deadlines.",
+        "reasoning": "The transcript explicitly states, 'User has been procrastinating for 2 hours, avoiding their work tasks.' This duration points to a significant behavioral pattern. Further evidence includes the sustained distraction activities like 'browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly,' and opening 'YouTube' to watch 'cat videos instead of working on their important project deadline.'",
+        "confidence": 9,
+        "decay": 10,
+        "created_at": "2025-10-27T04:07:14"
+      },
+      {
+        "id": 13,
+        "text": "test_user struggles with task initiation and maintaining engagement on important or deadline-driven work tasks.",
+        "reasoning": "The user is 'avoiding their work tasks' and is explicitly 'instead of working on their important project deadline.' This implies a significant barrier to starting or continuing crucial work, especially when there's a clear 'deadline.' The observed activities (social media browsing on 'Twitter,' 'Instagram,' 'Facebook,' and watching 'cat videos' on 'YouTube') are clear diversions from these specified responsibilities.",
+        "confidence": 9,
+        "decay": 10,
+        "created_at": "2025-10-27T04:07:14"
+      }
+    ],
+    "similar_propositions": [
+      {
+        "id": 14,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 10,
+        "decay": 10,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 15,
+        "text": "When engaged in Python coding within VS Code, {user_name} may exhibit extremely brief, potentially unintentional, shifts to other applications like a web browser to open YouTube, but quickly returns to their primary task.",
+        "reasoning": "The sequence 'User opened VS Code and started coding Python', 'User switched to browser and opened YouTube', and 'User returned to VS Code and continued coding' occurred within an extremely compressed timeframe of approximately 0.000592 seconds. This brief duration suggests the YouTube interaction was peripheral, momentary, or possibly a logging artifact rather than a deliberate, sustained context switch, and {user_name} swiftly re-engaged with VS Code and Python coding.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 0.5400116075105098,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 13,
+        "text": "test_user struggles with task initiation and maintaining engagement on important or deadline-driven work tasks.",
+        "reasoning": "The user is 'avoiding their work tasks' and is explicitly 'instead of working on their important project deadline.' This implies a significant barrier to starting or continuing crucial work, especially when there's a clear 'deadline.' The observed activities (social media browsing on 'Twitter,' 'Instagram,' 'Facebook,' and watching 'cat videos' on 'YouTube') are clear diversions from these specified responsibilities.",
+        "confidence": 9,
+        "decay": 10,
+        "relevance_score": 0.026305837296413864,
+        "created_at": "2025-10-27T04:07:14",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 9,
+        "text": "test_user exhibits a strong and prolonged pattern of procrastination and work avoidance, especially when facing significant deadlines.",
+        "reasoning": "The transcript explicitly states, 'User has been procrastinating for 2 hours, avoiding their work tasks.' This duration points to a significant behavioral pattern. Further evidence includes the sustained distraction activities like 'browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly,' and opening 'YouTube' to watch 'cat videos instead of working on their important project deadline.'",
+        "confidence": 9,
+        "decay": 10,
+        "relevance_score": 0.015764348304222586,
+        "created_at": "2025-10-27T04:07:14",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 16,
+        "text": "{user_name} uses social media platforms (Twitter, Instagram, Facebook) as a sustained method of distraction and time displacement.",
+        "reasoning": "The observation 'User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly' provides direct evidence of prolonged engagement with specific platforms for distraction.",
+        "confidence": 10,
+        "decay": 9,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 17,
+        "text": "When procrastinating on important work, {user_name} gravitates towards passive, entertaining video content, such as cat videos on YouTube.",
+        "reasoning": "The observation 'User opened YouTube and started watching cat videos instead of working on their important project deadline' directly demonstrates a preference for easily digestible, entertaining video content as a means of escape from demanding tasks.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "When procrastinating on important work, {user_name..."
+      },
+      {
+        "id": 18,
+        "text": "{user_name} is susceptible to external interruptions from notifications, which contribute to procrastination and make it difficult to maintain focus on work tasks.",
+        "reasoning": "The transcript notes that the user has been 'getting distracted by notifications' during their '2 hours' of procrastination, explicitly identifying notifications as a distraction factor influencing focus.",
+        "confidence": 8,
+        "decay": 7,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "When procrastinating on important work, {user_name..."
+      }
+    ],
+    "similar_observations": [
+      {
+        "id": 7,
+        "observer_name": "Screen",
+        "content": "User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 1.0
+      },
+      {
+        "id": 9,
+        "observer_name": "Screen",
+        "content": "User has been procrastinating for 2 hours, avoiding their work tasks and getting distracted by notifications",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 0.059245474328029624
+      },
+      {
+        "id": 5,
+        "observer_name": "Screen",
+        "content": "User switched to browser and opened YouTube",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 0.03377187168373208
+      },
+      {
+        "id": 2,
+        "observer_name": "Screen",
+        "content": "```markdown\n## Screenshot 1 Transcription\n\n**Application:** Visual Studio Code (inferred from UI)\n\n**Top Bar:**\n*   `CUSTOMNUDGE`\n*   `File Edit Selection View Go Run Terminal Window Help` (partially ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.026593794367378965
+      },
+      {
+        "id": 3,
+        "observer_name": "Screen",
+        "content": "## Transcription of User's Screen Content\n\n### Screenshot 1\n\n**Chrome Browser Bar (Top Left - partially visible)**\nChrome File Edit View History Bookmarks Profiles Tab Window Help\n\n**VS Code Applicati...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.025822488688276968
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-10-26T21:08:27.545493",
+    "observation_content": "User opened YouTube and started watching cat videos instead of working on their important project deadline",
+    "observation_id": 8,
+    "generated_propositions": [
+      {
+        "id": 14,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 10,
+        "decay": 10,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 15,
+        "text": "When engaged in Python coding within VS Code, {user_name} may exhibit extremely brief, potentially unintentional, shifts to other applications like a web browser to open YouTube, but quickly returns to their primary task.",
+        "reasoning": "The sequence 'User opened VS Code and started coding Python', 'User switched to browser and opened YouTube', and 'User returned to VS Code and continued coding' occurred within an extremely compressed timeframe of approximately 0.000592 seconds. This brief duration suggests the YouTube interaction was peripheral, momentary, or possibly a logging artifact rather than a deliberate, sustained context switch, and {user_name} swiftly re-engaged with VS Code and Python coding.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 16,
+        "text": "{user_name} uses social media platforms (Twitter, Instagram, Facebook) as a sustained method of distraction and time displacement.",
+        "reasoning": "The observation 'User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly' provides direct evidence of prolonged engagement with specific platforms for distraction.",
+        "confidence": 10,
+        "decay": 9,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 17,
+        "text": "When procrastinating on important work, {user_name} gravitates towards passive, entertaining video content, such as cat videos on YouTube.",
+        "reasoning": "The observation 'User opened YouTube and started watching cat videos instead of working on their important project deadline' directly demonstrates a preference for easily digestible, entertaining video content as a means of escape from demanding tasks.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 18,
+        "text": "{user_name} is susceptible to external interruptions from notifications, which contribute to procrastination and make it difficult to maintain focus on work tasks.",
+        "reasoning": "The transcript notes that the user has been 'getting distracted by notifications' during their '2 hours' of procrastination, explicitly identifying notifications as a distraction factor influencing focus.",
+        "confidence": 8,
+        "decay": 7,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 9,
+        "text": "test_user exhibits a strong and prolonged pattern of procrastination and work avoidance, especially when facing significant deadlines.",
+        "reasoning": "The transcript explicitly states, 'User has been procrastinating for 2 hours, avoiding their work tasks.' This duration points to a significant behavioral pattern. Further evidence includes the sustained distraction activities like 'browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly,' and opening 'YouTube' to watch 'cat videos instead of working on their important project deadline.'",
+        "confidence": 9,
+        "decay": 10,
+        "created_at": "2025-10-27T04:07:14"
+      },
+      {
+        "id": 13,
+        "text": "test_user struggles with task initiation and maintaining engagement on important or deadline-driven work tasks.",
+        "reasoning": "The user is 'avoiding their work tasks' and is explicitly 'instead of working on their important project deadline.' This implies a significant barrier to starting or continuing crucial work, especially when there's a clear 'deadline.' The observed activities (social media browsing on 'Twitter,' 'Instagram,' 'Facebook,' and watching 'cat videos' on 'YouTube') are clear diversions from these specified responsibilities.",
+        "confidence": 9,
+        "decay": 10,
+        "created_at": "2025-10-27T04:07:14"
+      }
+    ],
+    "similar_propositions": [
+      {
+        "id": 14,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 10,
+        "decay": 10,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 15,
+        "text": "When engaged in Python coding within VS Code, {user_name} may exhibit extremely brief, potentially unintentional, shifts to other applications like a web browser to open YouTube, but quickly returns to their primary task.",
+        "reasoning": "The sequence 'User opened VS Code and started coding Python', 'User switched to browser and opened YouTube', and 'User returned to VS Code and continued coding' occurred within an extremely compressed timeframe of approximately 0.000592 seconds. This brief duration suggests the YouTube interaction was peripheral, momentary, or possibly a logging artifact rather than a deliberate, sustained context switch, and {user_name} swiftly re-engaged with VS Code and Python coding.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 0.5404167195556637,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 13,
+        "text": "test_user struggles with task initiation and maintaining engagement on important or deadline-driven work tasks.",
+        "reasoning": "The user is 'avoiding their work tasks' and is explicitly 'instead of working on their important project deadline.' This implies a significant barrier to starting or continuing crucial work, especially when there's a clear 'deadline.' The observed activities (social media browsing on 'Twitter,' 'Instagram,' 'Facebook,' and watching 'cat videos' on 'YouTube') are clear diversions from these specified responsibilities.",
+        "confidence": 9,
+        "decay": 10,
+        "relevance_score": 0.026296523755242905,
+        "created_at": "2025-10-27T04:07:14",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 9,
+        "text": "test_user exhibits a strong and prolonged pattern of procrastination and work avoidance, especially when facing significant deadlines.",
+        "reasoning": "The transcript explicitly states, 'User has been procrastinating for 2 hours, avoiding their work tasks.' This duration points to a significant behavioral pattern. Further evidence includes the sustained distraction activities like 'browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly,' and opening 'YouTube' to watch 'cat videos instead of working on their important project deadline.'",
+        "confidence": 9,
+        "decay": 10,
+        "relevance_score": 0.015754933932015044,
+        "created_at": "2025-10-27T04:07:14",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 16,
+        "text": "{user_name} uses social media platforms (Twitter, Instagram, Facebook) as a sustained method of distraction and time displacement.",
+        "reasoning": "The observation 'User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly' provides direct evidence of prolonged engagement with specific platforms for distraction.",
+        "confidence": 10,
+        "decay": 9,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 17,
+        "text": "When procrastinating on important work, {user_name} gravitates towards passive, entertaining video content, such as cat videos on YouTube.",
+        "reasoning": "The observation 'User opened YouTube and started watching cat videos instead of working on their important project deadline' directly demonstrates a preference for easily digestible, entertaining video content as a means of escape from demanding tasks.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "When procrastinating on important work, {user_name..."
+      },
+      {
+        "id": 18,
+        "text": "{user_name} is susceptible to external interruptions from notifications, which contribute to procrastination and make it difficult to maintain focus on work tasks.",
+        "reasoning": "The transcript notes that the user has been 'getting distracted by notifications' during their '2 hours' of procrastination, explicitly identifying notifications as a distraction factor influencing focus.",
+        "confidence": 8,
+        "decay": 7,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "When procrastinating on important work, {user_name..."
+      }
+    ],
+    "similar_observations": [
+      {
+        "id": 8,
+        "observer_name": "Screen",
+        "content": "User opened YouTube and started watching cat videos instead of working on their important project deadline",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 1.0
+      },
+      {
+        "id": 2,
+        "observer_name": "Screen",
+        "content": "```markdown\n## Screenshot 1 Transcription\n\n**Application:** Visual Studio Code (inferred from UI)\n\n**Top Bar:**\n*   `CUSTOMNUDGE`\n*   `File Edit Selection View Go Run Terminal Window Help` (partially ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.10675352564845719
+      },
+      {
+        "id": 9,
+        "observer_name": "Screen",
+        "content": "User has been procrastinating for 2 hours, avoiding their work tasks and getting distracted by notifications",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 0.10136718703181646
+      },
+      {
+        "id": 3,
+        "observer_name": "Screen",
+        "content": "## Transcription of User's Screen Content\n\n### Screenshot 1\n\n**Chrome Browser Bar (Top Left - partially visible)**\nChrome File Edit View History Bookmarks Profiles Tab Window Help\n\n**VS Code Applicati...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.09791577347105795
+      },
+      {
+        "id": 5,
+        "observer_name": "Screen",
+        "content": "User switched to browser and opened YouTube",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:04:18",
+        "relevance_score": 0.09099575210874777
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-10-26T21:08:42.311521",
+    "observation_content": "User has been procrastinating for 2 hours, avoiding their work tasks and getting distracted by notifications",
+    "observation_id": 9,
+    "generated_propositions": [
+      {
+        "id": 14,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 10,
+        "decay": 10,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 15,
+        "text": "When engaged in Python coding within VS Code, {user_name} may exhibit extremely brief, potentially unintentional, shifts to other applications like a web browser to open YouTube, but quickly returns to their primary task.",
+        "reasoning": "The sequence 'User opened VS Code and started coding Python', 'User switched to browser and opened YouTube', and 'User returned to VS Code and continued coding' occurred within an extremely compressed timeframe of approximately 0.000592 seconds. This brief duration suggests the YouTube interaction was peripheral, momentary, or possibly a logging artifact rather than a deliberate, sustained context switch, and {user_name} swiftly re-engaged with VS Code and Python coding.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 16,
+        "text": "{user_name} uses social media platforms (Twitter, Instagram, Facebook) as a sustained method of distraction and time displacement.",
+        "reasoning": "The observation 'User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly' provides direct evidence of prolonged engagement with specific platforms for distraction.",
+        "confidence": 10,
+        "decay": 9,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 17,
+        "text": "When procrastinating on important work, {user_name} gravitates towards passive, entertaining video content, such as cat videos on YouTube.",
+        "reasoning": "The observation 'User opened YouTube and started watching cat videos instead of working on their important project deadline' directly demonstrates a preference for easily digestible, entertaining video content as a means of escape from demanding tasks.",
+        "confidence": 9,
+        "decay": 8,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 18,
+        "text": "{user_name} is susceptible to external interruptions from notifications, which contribute to procrastination and make it difficult to maintain focus on work tasks.",
+        "reasoning": "The transcript notes that the user has been 'getting distracted by notifications' during their '2 hours' of procrastination, explicitly identifying notifications as a distraction factor influencing focus.",
+        "confidence": 8,
+        "decay": 7,
+        "created_at": "2025-10-27T04:08:11"
+      },
+      {
+        "id": 9,
+        "text": "test_user exhibits a strong and prolonged pattern of procrastination and work avoidance, especially when facing significant deadlines.",
+        "reasoning": "The transcript explicitly states, 'User has been procrastinating for 2 hours, avoiding their work tasks.' This duration points to a significant behavioral pattern. Further evidence includes the sustained distraction activities like 'browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly,' and opening 'YouTube' to watch 'cat videos instead of working on their important project deadline.'",
+        "confidence": 9,
+        "decay": 10,
+        "created_at": "2025-10-27T04:07:14"
+      },
+      {
+        "id": 13,
+        "text": "test_user struggles with task initiation and maintaining engagement on important or deadline-driven work tasks.",
+        "reasoning": "The user is 'avoiding their work tasks' and is explicitly 'instead of working on their important project deadline.' This implies a significant barrier to starting or continuing crucial work, especially when there's a clear 'deadline.' The observed activities (social media browsing on 'Twitter,' 'Instagram,' 'Facebook,' and watching 'cat videos' on 'YouTube') are clear diversions from these specified responsibilities.",
+        "confidence": 9,
+        "decay": 10,
+        "created_at": "2025-10-27T04:07:14"
+      }
+    ],
+    "similar_propositions": [
+      {
+        "id": 14,
+        "text": "{user_name} is actively engaged in software development, specifically coding in Python within the VS Code application.",
+        "reasoning": "The transcript explicitly states: 'User opened VS Code and started coding Python' and 'User returned to VS Code and continued coding.' This directly indicates {user_name}'s primary activity and chosen tools.",
+        "confidence": 10,
+        "decay": 10,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 15,
+        "text": "When engaged in Python coding within VS Code, {user_name} may exhibit extremely brief, potentially unintentional, shifts to other applications like a web browser to open YouTube, but quickly returns to their primary task.",
+        "reasoning": "The sequence 'User opened VS Code and started coding Python', 'User switched to browser and opened YouTube', and 'User returned to VS Code and continued coding' occurred within an extremely compressed timeframe of approximately 0.000592 seconds. This brief duration suggests the YouTube interaction was peripheral, momentary, or possibly a logging artifact rather than a deliberate, sustained context switch, and {user_name} swiftly re-engaged with VS Code and Python coding.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 0.5408002253171269,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 13,
+        "text": "test_user struggles with task initiation and maintaining engagement on important or deadline-driven work tasks.",
+        "reasoning": "The user is 'avoiding their work tasks' and is explicitly 'instead of working on their important project deadline.' This implies a significant barrier to starting or continuing crucial work, especially when there's a clear 'deadline.' The observed activities (social media browsing on 'Twitter,' 'Instagram,' 'Facebook,' and watching 'cat videos' on 'YouTube') are clear diversions from these specified responsibilities.",
+        "confidence": 9,
+        "decay": 10,
+        "relevance_score": 0.02628771007604319,
+        "created_at": "2025-10-27T04:07:14",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 9,
+        "text": "test_user exhibits a strong and prolonged pattern of procrastination and work avoidance, especially when facing significant deadlines.",
+        "reasoning": "The transcript explicitly states, 'User has been procrastinating for 2 hours, avoiding their work tasks.' This duration points to a significant behavioral pattern. Further evidence includes the sustained distraction activities like 'browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly,' and opening 'YouTube' to watch 'cat videos instead of working on their important project deadline.'",
+        "confidence": 9,
+        "decay": 10,
+        "relevance_score": 0.015746024833426145,
+        "created_at": "2025-10-27T04:07:14",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 16,
+        "text": "{user_name} uses social media platforms (Twitter, Instagram, Facebook) as a sustained method of distraction and time displacement.",
+        "reasoning": "The observation 'User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly' provides direct evidence of prolonged engagement with specific platforms for distraction.",
+        "confidence": 10,
+        "decay": 9,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "{user_name} is actively engaged in software develo..."
+      },
+      {
+        "id": 17,
+        "text": "When procrastinating on important work, {user_name} gravitates towards passive, entertaining video content, such as cat videos on YouTube.",
+        "reasoning": "The observation 'User opened YouTube and started watching cat videos instead of working on their important project deadline' directly demonstrates a preference for easily digestible, entertaining video content as a means of escape from demanding tasks.",
+        "confidence": 9,
+        "decay": 8,
+        "relevance_score": 1.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "When procrastinating on important work, {user_name..."
+      },
+      {
+        "id": 18,
+        "text": "{user_name} is susceptible to external interruptions from notifications, which contribute to procrastination and make it difficult to maintain focus on work tasks.",
+        "reasoning": "The transcript notes that the user has been 'getting distracted by notifications' during their '2 hours' of procrastination, explicitly identifying notifications as a distraction factor influencing focus.",
+        "confidence": 8,
+        "decay": 7,
+        "relevance_score": 0.0,
+        "created_at": "2025-10-27T04:08:11",
+        "matched_with": "When procrastinating on important work, {user_name..."
+      }
+    ],
+    "similar_observations": [
+      {
+        "id": 9,
+        "observer_name": "Screen",
+        "content": "User has been procrastinating for 2 hours, avoiding their work tasks and getting distracted by notifications",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 1.0
+      },
+      {
+        "id": 3,
+        "observer_name": "Screen",
+        "content": "## Transcription of User's Screen Content\n\n### Screenshot 1\n\n**Chrome Browser Bar (Top Left - partially visible)**\nChrome File Edit View History Bookmarks Profiles Tab Window Help\n\n**VS Code Applicati...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.22119409377799948
+      },
+      {
+        "id": 8,
+        "observer_name": "Screen",
+        "content": "User opened YouTube and started watching cat videos instead of working on their important project deadline",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 0.11746024999767934
+      },
+      {
+        "id": 7,
+        "observer_name": "Screen",
+        "content": "User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly",
+        "content_type": "text",
+        "created_at": "2025-10-27T04:06:55",
+        "relevance_score": 0.10409575673230764
+      },
+      {
+        "id": 2,
+        "observer_name": "Screen",
+        "content": "```markdown\n## Screenshot 1 Transcription\n\n**Application:** Visual Studio Code (inferred from UI)\n\n**Top Bar:**\n*   `CUSTOMNUDGE`\n*   `File Edit Selection View Go Run Terminal Window Help` (partially ...",
+        "content_type": "input_text",
+        "created_at": "2025-10-27T04:00:00",
+        "relevance_score": 0.09507144963602443
+      }
+    ]
+  }
+]

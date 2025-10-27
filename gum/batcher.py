@@ -10,7 +10,7 @@ class ObservationBatcher:
     """A persistent queue for batching observations to reduce API calls."""
     
     def __init__(self, data_directory: str, min_batch_size: int = 5, max_batch_size: int = 50):
-        self.data_directory = Path(data_directory).expanduser()
+        self.data_directory = Path(data_directory)
         self.min_batch_size = min_batch_size
         self.max_batch_size = max_batch_size
         
@@ -45,13 +45,42 @@ class ObservationBatcher:
             str: Observation ID
         """
         observation_id = str(uuid.uuid4())
-        observation_dict = {
-            'id': observation_id,
-            'observer_name': observer_name,
-            'content': content,
-            'content_type': content_type,
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
+        
+        # Ensure all content is serializable
+        try:
+            # Convert content to string and limit size to prevent pickle issues
+            if content is None:
+                content = "[None content]"
+            elif not isinstance(content, str):
+                content = str(content)
+            
+            # Limit content size to prevent very large pickle objects
+            if len(content) > 100000:  # 100KB limit
+                content = content[:100000] + "... [truncated]"
+                self.logger.warning(f"Truncated large content for observation {observation_id}")
+            
+            observation_dict = {
+                'id': observation_id,
+                'observer_name': str(observer_name),
+                'content': content,
+                'content_type': str(content_type),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Test serialization before adding to queue
+            import pickle
+            pickle.dumps(observation_dict)
+            
+        except Exception as e:
+            self.logger.error(f"Content serialization failed for observation {observation_id}: {e}")
+            # Create a safe fallback observation
+            observation_dict = {
+                'id': observation_id,
+                'observer_name': str(observer_name),
+                'content': f"[Serialization failed: {str(e)[:200]}]",
+                'content_type': str(content_type),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
         
         # Add to queue - automatically persisted by persist-queue
         self._queue.put(observation_dict)
@@ -59,7 +88,10 @@ class ObservationBatcher:
         
         # Signal that a batch is ready if we've reached minimum size
         if self.should_process_batch():
+            self.logger.info(f"Setting batch ready event (queue size: {self._queue.qsize()})")
             self._batch_ready_event.set()
+        else:
+            self.logger.debug(f"Not setting batch ready event (queue size: {self._queue.qsize()}, min: {self.min_batch_size})")
         
         return observation_id
         

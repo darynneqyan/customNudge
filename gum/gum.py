@@ -107,7 +107,7 @@ class gum:
         self.audit_prompt = audit_prompt or AUDIT_PROMPT
 
         self.provider = create_provider(
-            model="gemini-2.5-flash",
+            model=self.model,
             api_key=api_key or os.getenv("GOOGLE_API_KEY"),
             api_base=api_base
         )
@@ -119,7 +119,7 @@ class gum:
             self.logger.info("Notifications enabled")
         
         # Log provider information for debugging
-        self.logger.info(f"Using model: gemini-2.5-flash")
+        self.logger.info(f"Using model: {self.model}")
         self.logger.info(f"Provider: {type(self.provider).__name__}")
 
         self.engine = None
@@ -231,15 +231,24 @@ class gum:
 
     async def _batch_processing_loop(self):
         """Process batched observations when minimum batch size is reached."""
+        self.logger.info("Batch processing loop started")
         while True:
-            # Wait for batch to be ready (event-driven, no polling!)
-            await self.batcher.wait_for_batch_ready()
-            
-            # Use lock to ensure batch processing runs synchronously
-            async with self._batch_processing_lock:
-                batch = self.batcher.pop_batch()
-                self.logger.info(f"Processing batch of {len(batch)} observations")
-                await self._process_batch(batch)
+            try:
+                self.logger.info("Waiting for batch to be ready...")
+                # Wait for batch to be ready (event-driven, no polling!)
+                await self.batcher.wait_for_batch_ready()
+                self.logger.info("Batch ready event received!")
+                
+                # Use lock to ensure batch processing runs synchronously
+                async with self._batch_processing_lock:
+                    batch = self.batcher.pop_batch()
+                    self.logger.info(f"Processing batch of {len(batch)} observations")
+                    await self._process_batch(batch)
+            except Exception as e:
+                self.logger.error(f"Error in batch processing loop: {e}")
+                import traceback
+                self.logger.error(f"Traceback: {traceback.format_exc()}")
+                await asyncio.sleep(1)  # Prevent tight error loop
 
     async def _process_batch(self, batched_observations):
         """Process a batch of observations together to reduce API calls."""
