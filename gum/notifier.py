@@ -70,6 +70,10 @@ class GUMNotifier:
         
         # Load existing contexts if available
         self._load_notification_log()
+
+        # Cooldown configuration
+        self.last_notification_time = None
+        self.min_notification_interval = 120 # 2 minutes in seconds
     
     def _load_notification_log(self):
         """Load notification contexts from file."""
@@ -512,6 +516,12 @@ class GUMNotifier:
                     print(f"Reasoning: {decision.reasoning}")
                     
                     if decision.should_notify:
+                        in_cooldown, remaining = self._is_in_cooldown()
+                        if in_cooldown:
+                            print(f"NOTIFICATION BLOCKED - Cooldown ({remaining:.0f}s remaining)")
+                            print(f"{'='*60}\n")
+                            continue
+
                         print(f"\n📢 NOTIFICATION MESSAGE:")
                         print(f"{decision.notification_message}")
                         print(f"{'='*60}\n")
@@ -665,3 +675,25 @@ class GUMNotifier:
         except Exception as e:
             self.logger.error(f"Error cancelling observation {nudge_id}: {e}")
             return False
+    
+    def _is_in_cooldown(self) -> tuple[bool, float]:
+        """
+        Check if we're in cooldown period since last notification.
+        
+        Returns:
+            tuple: (is_in_cooldown, seconds_remaining)
+        """
+        if self.last_notification_time is None:
+            return False, 0.0
+        
+        time_since_last = (datetime.now() - self.last_notification_time).total_seconds()
+        
+        if time_since_last < self.min_notification_interval:
+            remaining = self.min_notification_interval - time_since_last
+            self.logger.info(
+                f"Cooldown active: {time_since_last:.0f}s since last notification "
+                f"({remaining:.0f}s remaining)"
+            )
+            return True, remaining
+        
+        return False, 0.0
