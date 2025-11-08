@@ -188,6 +188,12 @@ Return **only** JSON in the following format:
 
 NOTIFICATION_DECISION_PROMPT = """You are a helpful assistant that decides whether to send behavioral nudge notifications to {user_name}.
 
+# User Goal
+
+{user_goal}
+
+If {user_name} has set a specific goal for this session, all notifications should help them achieve that goal. Consider how the current observation relates to their goal when deciding whether to notify.
+
 Your goal is to help {user_name} change behaviors they want to improve by sending timely, relevant, and actionable notifications.
 
 # Current Context
@@ -211,22 +217,27 @@ Your goal is to help {user_name} change behaviors they want to improve by sendin
 
 Consider these factors when deciding whether to notify:
 
-1. **Relevance**: Is this observation related to a behavior {user_name} likely wants to change?
-2. **Timing**: Is this an appropriate moment to nudge {user_name}?
-3. **Actionability**: Can {user_name} act on this notification right now?
-4. **Novelty**: Is this different enough from recent notifications to be valuable?
-5. **Impact**: Could this notification actually influence behavior change?
+1. **Relevance** (0-10): How relevant is this observation to a behavior {user_name} likely wants to change? This is general behavioral relevance, separate from goal relevance.
+2. **Goal Relevance** (0-10): If {user_name} has set a specific goal for this session, rate how relevant this observation is to that goal (0 = not relevant, 10 = highly relevant). If no goal is set, use null. Consider whether this observation is helping or hindering progress toward their goal.
+3. **Timing**: Is this an appropriate moment to nudge {user_name}?
+4. **Actionability**: Can {user_name} act on this notification right now?
+5. **Novelty**: Is this different enough from recent notifications to be valuable?
+6. **Impact**: Could this notification actually influence behavior change?
 
 # Notification Guidelines
 
 **DO notify when:**
-- Pattern suggests procrastination, distraction, or unhealthy habits
-- User is starting/continuing a behavior they've struggled with before
+- **If goal is set**: Goal Relevance is high (7-10) - observation is highly relevant to user's goal
+- **If no goal**: Relevance is high (7-10) - observation is highly relevant to behaviors user likely wants to change
 - Timing is appropriate (not during deep work, important meetings, etc.)
-- Notification offers clear, actionable guidance
+- Notification offers clear, actionable guidance:
+  - **If goal is set**: aligned with user's goal
+  - **If no goal**: focused on improving the behavior
 - It's been a while since last similar notification
 
 **DON'T notify when:**
+- **If goal is set**: Goal Relevance is low (0-3) - observation is not relevant to user's goal
+- **If no goal**: Relevance is low (0-3) - observation is not relevant to behaviors user likely wants to change
 - User is in focused work state
 - Recent notifications already addressed this
 - Observation is neutral/positive behavior
@@ -237,7 +248,7 @@ Consider these factors when deciding whether to notify:
 
 Decide whether to send a notification. If yes, craft a **succinct, actionable message** (max 100 characters) that:
 - Acknowledges the current behavior
-- Suggests a specific change
+- Suggests a specific change (if {user_name} has a goal, align the suggestion with that goal)
 - Is encouraging, not judgmental
 - Focuses on what user wants to improve
 
@@ -245,9 +256,10 @@ Return your decision in this exact JSON format:
 
 {{
   "should_notify": true/false,
-  "relevance_score": <1-10>,
-  "urgency_score": <1-10>,
-  "impact_score": <1-10>,
+  "relevance_score": <0-10>,  
+  "goal_relevance_score": <0-10 or null>,
+  "urgency_score": <0-10>,
+  "impact_score": <0-10>,
   "reasoning": "<brief explanation for decision>",
   "notification_message": "<succinct message if should_notify=true, otherwise empty string>",
   "notification_type": "<one of: 'focus', 'break', 'habit', 'health', 'productivity', 'none'>"

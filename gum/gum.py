@@ -20,7 +20,7 @@ from .db_utils import (
     get_related_observations,
     search_propositions_bm25,
 )
-from .models import Observation, Proposition, init_db
+from .models import Observation, Proposition, Goal, init_db
 from .observers import Observer
 from .providers import create_provider, ModelProvider
 from .schemas import (
@@ -73,6 +73,7 @@ class gum:
         min_batch_size: int = 5,
         max_batch_size: int = 50,
         enable_notifications: bool = False,
+        user_goal: str | None = None,
     ):
         # basic paths
         data_directory = os.path.expanduser(data_directory)
@@ -84,6 +85,7 @@ class gum:
         self.model = model
         self.audit_enabled = audit_enabled
         self.enable_notifications = enable_notifications
+        self.user_goal = user_goal
 
         # batching configuration
         self.min_batch_size = min_batch_size
@@ -176,6 +178,22 @@ class gum:
                 self._db_name, self._data_directory
             )
 
+    async def _save_user_goal(self):
+        """Save the user's goal to the database."""
+        if not self.user_goal:
+            return
+        
+        try:
+            async with self._session() as session:
+                goal = Goal(goal_text=self.user_goal)
+                session.add(goal)
+                await session.flush()
+                
+                self.logger.info(f"Saved user goal to database (goal_id={goal.id})")
+        except Exception as e:
+            self.logger.error(f"Error saving user goal to database: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+        
     async def __aenter__(self):
         """Async context manager entry point.
         
@@ -183,6 +201,12 @@ class gum:
             gum: The instance of the gum class.
         """
         await self.connect_db()
+        
+        # Save user goal to database if provided
+        if self.user_goal:
+            await self._save_user_goal()
+        
+        # Observation loop
         self.start_update_loop()
         
         # Start batcher if enabled

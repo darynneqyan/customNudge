@@ -10,7 +10,7 @@ setup(
         "mss",  # For screen capture
         "pynput",  # For mouse/keyboard monitoring
         "shapely",  # For geometry operations
-        "pyobjc-framework-Quartz",  # For macOS window management
+        "pyobjc-core>=10.0", # For Quartz and AppKit
         "openai>=1.0.0",
         "SQLAlchemy>=2.0.0",
         "pydantic>=2.0.0",
