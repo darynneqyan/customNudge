@@ -59,6 +59,7 @@ class ObservationWindowManager:
         
         # Track active observations
         self.active_observations: Dict[str, NudgeObservation] = {}
+        self._observation_tasks: Dict[str, asyncio.Task] = {} # added this line
         
         self.logger.info(f"ObservationWindowManager initialized for user: {user_name}")
     
@@ -96,8 +97,9 @@ class ObservationWindowManager:
             # Store active observation
             self.active_observations[nudge_id] = observation
             
-            # Schedule observation completion
-            asyncio.create_task(self._complete_observation_after_delay(nudge_id))
+            # Schedule observation completion and store task
+            task = asyncio.create_task(self._complete_observation_after_delay(nudge_id))
+            self._observation_tasks[nudge_id] = task  # Track the task
             
             self.logger.info(f"Started observation window for nudge {nudge_id} (duration: {observation.observation_duration}s)")
             return nudge_id
@@ -154,8 +156,10 @@ class ObservationWindowManager:
             # Log training data
             await self.training_logger.log_training_data(training_entry)
             
-            # Clean up active observation
+            # Clean up active observation and task
             del self.active_observations[nudge_id]
+            if nudge_id in self._observation_tasks:  # Clean up task
+                del self._observation_tasks[nudge_id]
             
             self.logger.info(f"Completed observation for nudge {nudge_id}, score: {judge_score['score']}")
             
@@ -164,6 +168,8 @@ class ObservationWindowManager:
             # Clean up on error
             if nudge_id in self.active_observations:
                 del self.active_observations[nudge_id]
+            if nudge_id in self._observation_tasks:
+                del self._observation_tasks[nudge_id]
     
     def get_active_observations(self) -> Dict[str, NudgeObservation]:
         """
@@ -185,8 +191,11 @@ class ObservationWindowManager:
             bool: True if observation was cancelled, False if not found
         """
         if nudge_id in self.active_observations:
+            if nudge_id in self._observation_tasks:
+                self._observation_tasks[nudge_id].cancel()
+                del self._observation_tasks[nudge_id]
+            
             del self.active_observations[nudge_id]
-            self.logger.info(f"Cancelled observation {nudge_id}")
             return True
         else:
             self.logger.warning(f"Observation {nudge_id} not found for cancellation")

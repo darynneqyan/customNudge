@@ -19,11 +19,12 @@ class ObservationBatcher:
         queue_dir.mkdir(parents=True, exist_ok=True)
         self._queue = Queue(path=str(queue_dir / "queue"))
         
-        self._batch_ready_event = asyncio.Event()        
+        self._batch_ready_event = None # asyncio.Event()        
         self.logger = logging.getLogger("gum.batcher")
         
     async def start(self):
         """Start the batching system."""
+        self._batch_ready_event = asyncio.Event() # added this line
         self.logger.info(f"Started batcher with {self._queue.qsize()} items in queue")
         
         if self.should_process_batch():

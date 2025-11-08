@@ -99,6 +99,11 @@ class gum:
             h = logging.StreamHandler()
             h.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
             self.logger.addHandler(h)
+
+        if enable_notifications:
+            from .notifier import GUMNotifier
+            self.notifier = GUMNotifier(user_name, gum_instance=self)
+            self.logger.info("Notifications enabled")
         
         # prompts
         self.propose_prompt = propose_prompt or PROPOSE_PROMPT
@@ -107,19 +112,13 @@ class gum:
         self.audit_prompt = audit_prompt or AUDIT_PROMPT
 
         self.provider = create_provider(
-            model=self.model,
-            api_key=api_key or os.getenv("GOOGLE_API_KEY"),
-            api_base=api_base
+            model=model,
+            api_key=api_key or os.getenv("GUM_LM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GOOGLE_API_KEY"),
+            api_base=api_base or os.getenv("GUM_LM_API_BASE")
         )
         
-        # Initialize notifier after provider is created
-        if enable_notifications:
-            from .notifier import GUMNotifier
-            self.notifier = GUMNotifier(user_name, gum_instance=self)
-            self.logger.info("Notifications enabled")
-        
         # Log provider information for debugging
-        self.logger.info(f"Using model: {self.model}")
+        self.logger.info(f"Using model: {model}")
         self.logger.info(f"Provider: {type(self.provider).__name__}")
 
         self.engine = None
@@ -188,7 +187,7 @@ class gum:
         # Start batcher if enabled
         if self.batcher:
             await self.batcher.start()
-            
+        
         self.start_update_loop()
             
         return self
@@ -231,24 +230,15 @@ class gum:
 
     async def _batch_processing_loop(self):
         """Process batched observations when minimum batch size is reached."""
-        self.logger.info("Batch processing loop started")
         while True:
-            try:
-                self.logger.info("Waiting for batch to be ready...")
-                # Wait for batch to be ready (event-driven, no polling!)
-                await self.batcher.wait_for_batch_ready()
-                self.logger.info("Batch ready event received!")
-                
-                # Use lock to ensure batch processing runs synchronously
-                async with self._batch_processing_lock:
-                    batch = self.batcher.pop_batch()
-                    self.logger.info(f"Processing batch of {len(batch)} observations")
-                    await self._process_batch(batch)
-            except Exception as e:
-                self.logger.error(f"Error in batch processing loop: {e}")
-                import traceback
-                self.logger.error(f"Traceback: {traceback.format_exc()}")
-                await asyncio.sleep(1)  # Prevent tight error loop
+            # Wait for batch to be ready (event-driven, no polling!)
+            await self.batcher.wait_for_batch_ready()
+            
+            # Use lock to ensure batch processing runs synchronously
+            async with self._batch_processing_lock:
+                batch = self.batcher.pop_batch()
+                self.logger.info(f"Processing batch of {len(batch)} observations")
+                await self._process_batch(batch)
 
     async def _process_batch(self, batched_observations):
         """Process a batch of observations together to reduce API calls."""
