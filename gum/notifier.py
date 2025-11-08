@@ -82,10 +82,15 @@ class GUMNotifier:
                 with open(self.contexts_file, 'r') as f:
                     data = json.load(f)
                     self.notification_contexts = [NotificationContext(**entry) for entry in data]
-                self.logger.info(f"Loaded {len(self.notification_contexts)} notification contexts")
+                if len(self.notification_contexts) > 0:
+                    self.logger.info(f"Loaded {len(self.notification_contexts)} notification contexts")
+                else:
+                    self.logger.info("No existing notification contexts found - system will create new contexts as observations are processed")
             except Exception as e:
                 self.logger.error(f"Error loading notification log: {e}")
                 self.notification_contexts = []
+        else:
+            self.logger.info("Notification contexts file not found - system will create new contexts as observations are processed")
     
     def _save_notification_log(self):
         """Save notification contexts to file."""
@@ -576,7 +581,7 @@ class GUMNotifier:
         
         # Save all contexts to file
         self._save_notification_log()
-        self.logger.info(f"Saved notification contexts to {self.log_file}")
+        self.logger.info(f"Saved notification contexts to {self.contexts_file}")
     
     def _display_notification(self, message: str, notification_type: str):
         """Display a native macOS notification."""

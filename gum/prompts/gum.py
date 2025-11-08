@@ -253,6 +253,7 @@ Consider these factors when deciding whether to notify:
 - Too many notifications sent recently (notification fatigue) (ideal notification frequency is no more than once every 5 minutes)
 - Message would be vague or unhelpful
 - Previous similar notifications were ineffective AND no new approach available
+- If the user is actively working on a task, then do not send notifications related to that task (i.e. the user is reading or debugging, do not send notifications related to reading or debugging)
 
 # Task
 
