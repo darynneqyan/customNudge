@@ -248,9 +248,9 @@ Consider these factors when deciding whether to notify:
 
 **DON'T notify when:**
 - User is in focused work state
-- Recent notifications already addressed this
+- Recent (~ past 3) notifications already addressed this, and previous notifications are in the same category
 - Observation is neutral/positive behavior
-- Too many notifications sent recently (notification fatigue)
+- Too many notifications sent recently (notification fatigue) (ideal notification frequency is no more than once every 5 minutes)
 - Message would be vague or unhelpful
 - Previous similar notifications were ineffective AND no new approach available
 
