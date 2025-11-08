@@ -1,8 +1,8 @@
 site_name: GUM Documentation
 site_description: Documentation for the GUM (General User Models) project
 site_author: GUM Team
-repo_url: https://github.com/generalusermodels/gum
-repo_name: gum
+repo_url: https://github.com/darynneqyan/customNudge
+repo_name: customNudge
 copyright: With inspiration from DSPy docs
 
 theme:
