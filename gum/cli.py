@@ -7,6 +7,7 @@ import asyncio
 import shutil  
 from gum import gum
 from gum.observers import Screen
+from gum.goal import prompt_for_goal
 
 class QueryAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -44,20 +45,8 @@ def parse_args():
 
     return args
 
-async def main():
-    args = parse_args()
-
-    # Handle --reset-cache before anything else
-    if getattr(args, 'reset_cache', False):
-        cache_dir = os.path.expanduser('~/.cache/gum/')
-        if os.path.exists(cache_dir):
-            shutil.rmtree(cache_dir)
-            print(f"Deleted cache directory: {cache_dir}")
-        else:
-            print(f"Cache directory does not exist: {cache_dir}")
-        return
-
-    model = args.model or os.getenv('MODEL_NAME') or 'gemini-2.5-flash'
+async def main(args, user_goal=None):
+    model = args.model or os.getenv('MODEL_NAME') or 'gpt-4o-mini'
     user_name = args.user_name or os.getenv('USER_NAME')
 
     # Batching configuration - follow same pattern as other args    
@@ -69,6 +58,7 @@ async def main():
         print("Please provide a user name (as an argument, -u, or as an env variable) or a query (as an argument, -q)")
         return
     
+    # Query Mode
     if args.query is not None:
         gum_instance = gum(user_name, model)
         await gum_instance.connect_db()
@@ -84,6 +74,8 @@ async def main():
                 print(f"Confidence: {prop.confidence:.2f}")
             print(f"Relevance Score: {score:.2f}")
             print("-" * 80)
+    
+    # Listening Mode 
     else:
         print(f"Listening to {user_name} with model {model}")
         
@@ -99,12 +91,48 @@ async def main():
             Screen(model),
             min_batch_size=min_batch_size,
             max_batch_size=max_batch_size,
-            enable_notifications=enable_notifications
+            enable_notifications=enable_notifications,
+            user_goal=user_goal
         ) as gum_instance:
-            await asyncio.Future()  # run forever (Ctrl-C to stop)
+            try:
+                await asyncio.Future()  # run forever (Ctrl-C to stop)
+            except asyncio.CancelledError:
+                print("\nShutting down...")
+                raise
 
 def cli():
-    asyncio.run(main())
+    args = parse_args()
+    
+    # Handle --reset-cache before anything else (synchronously)
+    if getattr(args, 'reset_cache', False):
+        cache_dir = os.path.expanduser('~/.cache/gum/')
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir)
+            print(f"Deleted cache directory: {cache_dir}")
+        else:
+            print(f"Cache directory does not exist: {cache_dir}")
+        return
+    
+    # Determine if we're in listening mode or query mode 
+    user_name = args.user_name or os.getenv('USER_NAME')
+    is_listening_mode = args.query is None and user_name is not None
+    
+    user_goal = None
+    if is_listening_mode:
+        print(f"Listening to {user_name} with model {args.model or os.getenv('MODEL_NAME') or 'gpt-4o-mini'}")
+        print("Prompting for your goal...")
+        user_goal = prompt_for_goal()
+        
+        if user_goal is None:
+            print("No goal entered. Starting without a specific goal.")
+            user_goal = None
+        else:
+            print(f"Goal set: {user_goal}")
+    
+    try:
+        asyncio.run(main(args, user_goal=user_goal))
+    except KeyboardInterrupt:
+        print("\nExiting...")
 
 if __name__ == '__main__':
     cli()

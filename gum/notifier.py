@@ -35,6 +35,7 @@ class NotificationDecision:
     """LLM decision about whether to notify."""
     should_notify: bool
     relevance_score: float
+    goal_relevance_score: Optional[float] 
     urgency_score: float
     impact_score: float
     reasoning: str
@@ -140,13 +141,13 @@ class GUMNotifier:
             
             # Build learning context
             learning_context = f"""
-**Effectiveness Analysis:**
-- Recent {notification_type or 'all'} notifications: {len(relevant_entries)}
-- Effective: {effective_count} ({effectiveness_rate:.1%})
-- Ineffective: {ineffective_count}
+            **Effectiveness Analysis:**
+            - Recent {notification_type or 'all'} notifications: {len(relevant_entries)}
+            - Effective: {effective_count} ({effectiveness_rate:.1%})
+            - Ineffective: {ineffective_count}
 
-**Recent Patterns:**
-"""
+            **Recent Patterns:**
+            """
             for pattern in recent_patterns:
                 status = "✅ Effective" if pattern['effective'] else "❌ Ineffective"
                 learning_context += f"- [{pattern['timestamp']}] {pattern['type']}: {status}\n  Reasoning: {pattern['reasoning']}\n"
@@ -173,6 +174,7 @@ class GUMNotifier:
                 'observation_id': context.observation_id,
                 'should_notify': decision.should_notify,
                 'relevance_score': decision.relevance_score,
+                'goal_relevance_score': decision.goal_relevance_score,
                 'urgency_score': decision.urgency_score,
                 'impact_score': decision.impact_score,
                 'reasoning': decision.reasoning,
@@ -354,10 +356,18 @@ class GUMNotifier:
         
         # Get learning context from training data
         learning_context = self._get_learning_context()
+
+        # Get user goal from gum_instance or default 
+        user_goal = getattr(self.gum_instance, 'user_goal', None)
+        if user_goal:
+            user_goal_text = f"{self.user_name} has set the following goal for this session: {user_goal}"
+        else:
+            user_goal_text = f"{self.user_name} has not set a specific goal for this session. Consider general behavioral patterns and what they likely want to improve."
         
         # Construct prompt
         prompt = NOTIFICATION_DECISION_PROMPT.format(
             user_name=self.user_name,
+            user_goal=user_goal_text,
             observation_content=observation_content,
             generated_propositions=gen_props_text,
             similar_propositions=sim_props_text,
@@ -405,9 +415,13 @@ class GUMNotifier:
                 return None
             
             # Create decision object
+            goal_relevance = result.get('goal_relevance_score')
+            goal_relevance_score = float(goal_relevance) if goal_relevance is not None else None
+            
             decision = NotificationDecision(
                 should_notify=result.get('should_notify', False),
                 relevance_score=float(result.get('relevance_score', 0)),
+                goal_relevance_score=goal_relevance_score,
                 urgency_score=float(result.get('urgency_score', 0)),
                 impact_score=float(result.get('impact_score', 0)),
                 reasoning=result.get('reasoning', ''),
@@ -415,10 +429,11 @@ class GUMNotifier:
                 notification_type=result.get('notification_type', 'none')
             )
             
+            goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
             self.logger.info(
                 f"LLM Decision: should_notify={decision.should_notify}, "
-                f"relevance={decision.relevance_score}, urgency={decision.urgency_score}, "
-                f"impact={decision.impact_score}"
+                f"relevance={decision.relevance_score}, goal_relevance={goal_relevance}, "
+                f"urgency={decision.urgency_score}, impact={decision.impact_score}"
             )
             
             return decision
@@ -502,9 +517,11 @@ class GUMNotifier:
                     self._save_decision(context, decision)
                     
                     # Log decision
+                    goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
                     self.logger.info(
                         f"LLM Decision - Should notify: {decision.should_notify}, "
                         f"Relevance: {decision.relevance_score}/10, "
+                        f"Goal Relevance: {goal_relevance}, "
                         f"Urgency: {decision.urgency_score}/10, "
                         f"Impact: {decision.impact_score}/10"
                     )
@@ -516,6 +533,8 @@ class GUMNotifier:
                     print(f"Should Notify: {'✅ YES' if decision.should_notify else '❌ NO'}")
                     print(f"Type: {decision.notification_type}")
                     print(f"Relevance: {decision.relevance_score}/10")
+                    goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
+                    print(f"Goal Relevance: {goal_relevance}")
                     print(f"Urgency: {decision.urgency_score}/10")
                     print(f"Impact: {decision.impact_score}/10")
                     print(f"Reasoning: {decision.reasoning}")
@@ -540,6 +559,7 @@ class GUMNotifier:
                             'message': decision.notification_message,
                             'type': decision.notification_type,
                             'relevance': decision.relevance_score,
+                            'goal_relevance': decision.goal_relevance_score,
                             'urgency': decision.urgency_score,
                             'impact': decision.impact_score
                         })

@@ -168,6 +168,36 @@ class Proposition(Base):
         return f"<Proposition(id={self.id}, text={preview})>"
 
 
+class Goal(Base):
+    """Represents a user goal for a session.
+    
+    This model stores goals that users set at the start of each session.
+    Goals are stored for future user profiling but don't persist across sessions.
+    
+    Attributes:
+        id (int): Primary key for the goal.
+        goal_text (str): The actual goal text entered by the user.
+        created_at (datetime): When the goal was created.
+    """
+    __tablename__ = "goals"
+
+    id:         Mapped[int]   = mapped_column(primary_key=True)
+    goal_text:  Mapped[str]   = mapped_column(Text, nullable=False)
+    
+    created_at: Mapped[str]   = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the goal.
+        
+        Returns:
+            str: A string representation showing the goal ID and a preview of its text.
+        """
+        preview = (self.goal_text[:27] + "…") if len(self.goal_text) > 30 else self.goal_text
+        return f"<Goal(id={self.id}, text={preview})>"
+
+
 FTS_TOKENIZER = "porter ascii"
 
 def create_fts_table(conn) -> None:
