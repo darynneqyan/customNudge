@@ -257,7 +257,6 @@ Consider these factors when deciding whether to notify:
 **DON'T notify when:**
 - **If goal is set**: Goal Relevance is low (0-3) - observation is not relevant to user's goal
 - **If no goal**: Relevance is low (0-3) - observation is not relevant to behaviors user likely wants to change
-- User is in focused work state
 - Recent (~ past 3) notifications already addressed this, and previous notifications are in the same category
 - Observation is neutral/positive behavior
 - Too many notifications sent recently (notification fatigue) (ideal notification frequency is no more than once every 5 minutes)
