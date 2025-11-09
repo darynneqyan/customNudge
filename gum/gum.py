@@ -212,6 +212,8 @@ class gum:
         # Start batcher if enabled
         if self.batcher:
             await self.batcher.start()
+        
+        self.start_update_loop()
             
         return self
 

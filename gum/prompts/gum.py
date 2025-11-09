@@ -213,6 +213,9 @@ Your goal is to help {user_name} change behaviors they want to improve by sendin
 ## Recent Notification History
 {notification_history}
 
+## Learning from Previous Actions
+{learning_context}
+
 # Decision Criteria
 
 Consider these factors when deciding whether to notify:
@@ -234,15 +237,18 @@ Consider these factors when deciding whether to notify:
   - **If goal is set**: aligned with user's goal
   - **If no goal**: focused on improving the behavior
 - It's been a while since last similar notification
+- Previous similar notifications were effective OR you're trying a new approach
 
 **DON'T notify when:**
 - **If goal is set**: Goal Relevance is low (0-3) - observation is not relevant to user's goal
 - **If no goal**: Relevance is low (0-3) - observation is not relevant to behaviors user likely wants to change
 - User is in focused work state
-- Recent notifications already addressed this
+- Recent (~ past 3) notifications already addressed this, and previous notifications are in the same category
 - Observation is neutral/positive behavior
-- Too many notifications sent recently (notification fatigue)
+- Too many notifications sent recently (notification fatigue) (ideal notification frequency is no more than once every 5 minutes)
 - Message would be vague or unhelpful
+- Previous similar notifications were ineffective AND no new approach available
+- If the user is actively working on a task, then do not send notifications related to that task (i.e. the user is reading or debugging, do not send notifications related to reading or debugging)
 
 # Task
 
@@ -251,6 +257,7 @@ Decide whether to send a notification. If yes, craft a **succinct, actionable me
 - Suggests a specific change (if {user_name} has a goal, align the suggestion with that goal)
 - Is encouraging, not judgmental
 - Focuses on what user wants to improve
+- Learns from previous effectiveness patterns
 
 Return your decision in this exact JSON format:
 
@@ -265,7 +272,7 @@ Return your decision in this exact JSON format:
   "notification_type": "<one of: 'focus', 'break', 'habit', 'health', 'productivity', 'none'>"
 }}
 
-Be conservative - only notify when there's clear value. Quality over quantity."""
+Be conservative - only notify when there's clear value. Quality over quantity. Learn from every interaction."""
 
 SIMILAR_PROMPT = """You will label sets of propositions based on how similar they are to eachother.
 

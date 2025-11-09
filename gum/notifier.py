@@ -10,10 +10,13 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
+import asyncio
+import subprocess
 
 from .db_utils import search_propositions_bm25, search_observations_bm25, get_related_propositions
 from .models import Observation, Proposition
 from .prompts.gum import NOTIFICATION_DECISION_PROMPT
+from .adaptive_nudge import ObservationWindowManager
 import re
 
 
@@ -62,8 +65,16 @@ class GUMNotifier:
         self.contexts_file = Path(f"notification_contexts_{user_name.lower().replace(' ', '_')}.json")
         self.decisions_file = Path(f"notification_decisions_{user_name.lower().replace(' ', '_')}.json")
         
+        # Initialize Adaptive Nudge Engine
+        self.observation_manager = ObservationWindowManager(user_name)
+        self.adaptive_nudge_enabled = True  # Can be controlled via environment variable
+        
         # Load existing contexts if available
         self._load_notification_log()
+
+        # Cooldown configuration
+        self.last_notification_time = None
+        self.min_notification_interval = 120 # 2 minutes in seconds
     
     def _load_notification_log(self):
         """Load notification contexts from file."""
@@ -72,10 +83,15 @@ class GUMNotifier:
                 with open(self.contexts_file, 'r') as f:
                     data = json.load(f)
                     self.notification_contexts = [NotificationContext(**entry) for entry in data]
-                self.logger.info(f"Loaded {len(self.notification_contexts)} notification contexts")
+                if len(self.notification_contexts) > 0:
+                    self.logger.info(f"Loaded {len(self.notification_contexts)} notification contexts")
+                else:
+                    self.logger.info("No existing notification contexts found - system will create new contexts as observations are processed")
             except Exception as e:
                 self.logger.error(f"Error loading notification log: {e}")
                 self.notification_contexts = []
+        else:
+            self.logger.info("Notification contexts file not found - system will create new contexts as observations are processed")
     
     def _save_notification_log(self):
         """Save notification contexts to file."""
@@ -85,6 +101,70 @@ class GUMNotifier:
                 json.dump(data, f, indent=2)
         except Exception as e:
             self.logger.error(f"Error saving notification log: {e}")
+    
+    def _get_learning_context(self, notification_type: str = None) -> str:
+        """Extract learning insights from training data for similar notification types."""
+        try:
+            from .adaptive_nudge.training_logger import TrainingDataLogger
+            training_logger = TrainingDataLogger(self.user_name)
+            
+            # Get recent training entries
+            recent_entries = training_logger.get_recent_entries(hours=24)
+            
+            if not recent_entries:
+                return "No recent training data available for learning."
+            
+            # Filter by notification type if specified
+            if notification_type:
+                relevant_entries = [e for e in recent_entries if e.get('nudge_type') == notification_type]
+            else:
+                relevant_entries = recent_entries
+            
+            if not relevant_entries:
+                return f"No recent {notification_type} notifications to learn from."
+            
+            # Analyze effectiveness patterns
+            effective_count = sum(1 for e in relevant_entries if e.get('judge_score') == 1)
+            ineffective_count = len(relevant_entries) - effective_count
+            effectiveness_rate = effective_count / len(relevant_entries) if relevant_entries else 0
+            
+            # Get recent patterns
+            recent_patterns = []
+            for entry in relevant_entries[-3:]:  # Last 3 entries
+                pattern = {
+                    'type': entry.get('nudge_type', 'unknown'),
+                    'effective': entry.get('judge_score') == 1,
+                    'reasoning': entry.get('judge_reasoning', '')[:100] + "..." if entry.get('judge_reasoning') else 'No reasoning',
+                    'timestamp': entry.get('timestamp', 'unknown')
+                }
+                recent_patterns.append(pattern)
+            
+            # Build learning context
+            learning_context = f"""
+**Effectiveness Analysis:**
+- Recent {notification_type or 'all'} notifications: {len(relevant_entries)}
+- Effective: {effective_count} ({effectiveness_rate:.1%})
+- Ineffective: {ineffective_count}
+
+**Recent Patterns:**
+"""
+            for pattern in recent_patterns:
+                status = "✅ Effective" if pattern['effective'] else "❌ Ineffective"
+                learning_context += f"- [{pattern['timestamp']}] {pattern['type']}: {status}\n  Reasoning: {pattern['reasoning']}\n"
+            
+            # Add recommendations
+            if effectiveness_rate < 0.3:
+                learning_context += "\n**Learning Insight:** Low effectiveness rate suggests need for different approach or timing."
+            elif effectiveness_rate > 0.7:
+                learning_context += "\n**Learning Insight:** High effectiveness rate - continue similar approach."
+            else:
+                learning_context += "\n**Learning Insight:** Mixed results - consider context-specific adjustments."
+            
+            return learning_context.strip()
+            
+        except Exception as e:
+            self.logger.error(f"Error getting learning context: {e}")
+            return "Unable to retrieve learning context from training data."
     
     def _save_decision(self, context: NotificationContext, decision: NotificationDecision):
         """Save a notification decision to separate file for GUI."""
@@ -274,6 +354,9 @@ class GUMNotifier:
             for n in recent_notifs
         ]) if recent_notifs else "No recent notifications"
         
+        # Get learning context from training data
+        learning_context = self._get_learning_context()
+
         # Get user goal from gum_instance or default 
         user_goal = getattr(self.gum_instance, 'user_goal', None)
         if user_goal:
@@ -289,7 +372,8 @@ class GUMNotifier:
             generated_propositions=gen_props_text,
             similar_propositions=sim_props_text,
             similar_observations=sim_obs_text,
-            notification_history=notif_history_text
+            notification_history=notif_history_text,
+            learning_context=learning_context
         )
         
         try:
@@ -456,9 +540,18 @@ class GUMNotifier:
                     print(f"Reasoning: {decision.reasoning}")
                     
                     if decision.should_notify:
+                        in_cooldown, remaining = self._is_in_cooldown()
+                        if in_cooldown:
+                            print(f"NOTIFICATION BLOCKED - Cooldown ({remaining:.0f}s remaining)")
+                            print(f"{'='*60}\n")
+                            continue
+
                         print(f"\n📢 NOTIFICATION MESSAGE:")
                         print(f"{decision.notification_message}")
                         print(f"{'='*60}\n")
+                        
+                        # Display native macOS notification
+                        self._display_notification(decision.notification_message, decision.notification_type)
                         
                         # Track sent notification
                         self.sent_notifications.append({
@@ -470,6 +563,31 @@ class GUMNotifier:
                             'urgency': decision.urgency_score,
                             'impact': decision.impact_score
                         })
+                        
+                        # ADAPTIVE NUDGE ENGINE: Start observation window
+                        if self.adaptive_nudge_enabled:
+                            try:
+                                nudge_data = {
+                                    'user_context': {
+                                        'observation_content': context.observation_content,
+                                        'generated_propositions': context.generated_propositions,
+                                        'similar_propositions': context.similar_propositions,
+                                        'similar_observations': context.similar_observations,
+                                        'relevance_score': decision.relevance_score,
+                                        'urgency_score': decision.urgency_score,
+                                        'impact_score': decision.impact_score
+                                    },
+                                    'nudge_content': decision.notification_message,
+                                    'nudge_type': decision.notification_type,
+                                    'observation_duration': 180  # 3 minutes
+                                }
+                                
+                                # Start observation window asynchronously
+                                asyncio.create_task(self.observation_manager.start_observation(nudge_data))
+                                self.logger.info("Started adaptive nudge observation window")
+                                
+                            except Exception as e:
+                                self.logger.error(f"Error starting adaptive nudge observation: {e}")
                     else:
                         print(f"\n❌ No notification sent")
                         print(f"{'='*60}\n")
@@ -483,7 +601,42 @@ class GUMNotifier:
         
         # Save all contexts to file
         self._save_notification_log()
-        self.logger.info(f"Saved notification contexts to {self.log_file}")
+        self.logger.info(f"Saved notification contexts to {self.contexts_file}")
+    
+    def _display_notification(self, message: str, notification_type: str):
+        """Display a native macOS notification."""
+        try:
+            # Escape quotes in the message
+            escaped_message = message.replace('"', '\\"')
+            
+            # Customize title based on notification type
+            title_map = {
+                'break': '⏰ Break Reminder',
+                'focus': '🎯 Focus Nudge', 
+                'productivity': '⚡ Productivity Tip',
+                'habit': '🔄 Habit Reminder',
+                'health': '💚 Health Nudge',
+                'general': '🔔 GUM Nudge'
+            }
+            
+            title = title_map.get(notification_type, '🔔 GUM Nudge')
+            escaped_title = title.replace('"', '\\"')
+            
+            # Create the AppleScript command
+            script = f'''
+            display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
+            '''
+            
+            # Execute the notification
+            subprocess.run(['osascript', '-e', script], check=True, timeout=5)
+            self.logger.info(f"📢 Displayed notification: {title} - {message}")
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"❌ Failed to display notification: {e}")
+        except subprocess.TimeoutExpired:
+            self.logger.error("❌ Notification display timed out")
+        except Exception as e:
+            self.logger.error(f"❌ Error displaying notification: {e}")
     
     def get_recent_contexts(self, limit: int = 10) -> List[NotificationContext]:
         """Get the most recent notification contexts."""
@@ -495,3 +648,77 @@ class GUMNotifier:
             if context.observation_id == observation_id:
                 return context
         return None
+    
+    # ADAPTIVE NUDGE ENGINE METHODS
+    
+    def get_adaptive_nudge_statistics(self) -> Dict[str, Any]:
+        """Get statistics about the adaptive nudge engine."""
+        if not self.adaptive_nudge_enabled:
+            return {"enabled": False}
+        
+        try:
+            obs_stats = self.observation_manager.get_statistics()
+            training_stats = self.observation_manager.training_logger.get_statistics()
+            
+            return {
+                "enabled": True,
+                "active_observations": obs_stats,
+                "training_data": training_stats
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting adaptive nudge statistics: {e}")
+            return {"enabled": True, "error": str(e)}
+    
+    def enable_adaptive_nudge(self) -> None:
+        """Enable the adaptive nudge engine."""
+        self.adaptive_nudge_enabled = True
+        self.logger.info("Adaptive nudge engine enabled")
+    
+    def disable_adaptive_nudge(self) -> None:
+        """Disable the adaptive nudge engine."""
+        self.adaptive_nudge_enabled = False
+        self.logger.info("Adaptive nudge engine disabled")
+    
+    def get_active_observations(self) -> Dict[str, Any]:
+        """Get currently active observations."""
+        if not self.adaptive_nudge_enabled:
+            return {}
+        
+        try:
+            return self.observation_manager.get_active_observations()
+        except Exception as e:
+            self.logger.error(f"Error getting active observations: {e}")
+            return {}
+    
+    def cancel_observation(self, nudge_id: str) -> bool:
+        """Cancel an active observation."""
+        if not self.adaptive_nudge_enabled:
+            return False
+        
+        try:
+            return self.observation_manager.cancel_observation(nudge_id)
+        except Exception as e:
+            self.logger.error(f"Error cancelling observation {nudge_id}: {e}")
+            return False
+    
+    def _is_in_cooldown(self) -> tuple[bool, float]:
+        """
+        Check if we're in cooldown period since last notification.
+        
+        Returns:
+            tuple: (is_in_cooldown, seconds_remaining)
+        """
+        if self.last_notification_time is None:
+            return False, 0.0
+        
+        time_since_last = (datetime.now() - self.last_notification_time).total_seconds()
+        
+        if time_since_last < self.min_notification_interval:
+            remaining = self.min_notification_interval - time_since_last
+            self.logger.info(
+                f"Cooldown active: {time_since_last:.0f}s since last notification "
+                f"({remaining:.0f}s remaining)"
+            )
+            return True, remaining
+        
+        return False, 0.0

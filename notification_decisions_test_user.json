@@ -1,0 +1,47 @@
+[
+  {
+    "timestamp": "2025-10-26T21:08:11.936344",
+    "observation_id": 7,
+    "should_notify": true,
+    "relevance_score": 9.0,
+    "urgency_score": 7.0,
+    "impact_score": 8.0,
+    "reasoning": "The user has been browsing social media for 45 minutes, directly matching the high-confidence proposition that they use social media for sustained distraction. This aligns with past behavioral patterns indicating struggles with task initiation and procrastination. Given no recent notifications, a timely, actionable nudge can help interrupt the distraction and encourage refocusing, maximizing potential impact.",
+    "notification_message": "45 mins of social media. Ready to switch gears and tackle your next task?",
+    "notification_type": "productivity",
+    "observation_content": "User has been browsing social media for 45 minutes straight, switching between Twitter, Instagram, and Facebook repeatedly...",
+    "generated_propositions_count": 7,
+    "similar_propositions_count": 7,
+    "similar_observations_count": 5
+  },
+  {
+    "timestamp": "2025-10-26T21:08:27.545493",
+    "observation_id": 8,
+    "should_notify": true,
+    "relevance_score": 9.0,
+    "urgency_score": 8.0,
+    "impact_score": 7.0,
+    "reasoning": "User is actively procrastinating on an important project deadline by watching YouTube cat videos. This behavior (watching YouTube instead of working on deadlines) is a recurring, highly relevant pattern for test_user, suggesting it's likely a sustained distraction rather than a brief, unintentional shift. While a social media nudge was sent recently, this is a different platform. A timely, actionable notification can help interrupt the procrastination cycle and redirect test_user's focus. There's no specific effectiveness data, but addressing a known problematic pattern is valuable.",
+    "notification_message": "YouTube break over? Your important project deadline is waiting for your focus!",
+    "notification_type": "productivity",
+    "observation_content": "User opened YouTube and started watching cat videos instead of working on their important project deadline...",
+    "generated_propositions_count": 7,
+    "similar_propositions_count": 7,
+    "similar_observations_count": 5
+  },
+  {
+    "timestamp": "2025-10-26T21:08:42.311521",
+    "observation_id": 9,
+    "should_notify": false,
+    "relevance_score": 9.0,
+    "urgency_score": 7.0,
+    "impact_score": 3.0,
+    "reasoning": "User has been procrastinating for 2 hours, which is a significant period. However, two productivity notifications were sent only seconds ago (at 21:08:11 and 21:08:27) addressing very similar distraction patterns (social media, YouTube). Sending another notification immediately would likely lead to notification fatigue, reduce overall impact, and could contribute to the user being 'distracted by notifications' as mentioned in the current observation. It's better to allow some time for the previous nudges to take effect or for the user's context to change.",
+    "notification_message": "",
+    "notification_type": "none",
+    "observation_content": "User has been procrastinating for 2 hours, avoiding their work tasks and getting distracted by notifications...",
+    "generated_propositions_count": 7,
+    "similar_propositions_count": 7,
+    "similar_observations_count": 5
+  }
+]

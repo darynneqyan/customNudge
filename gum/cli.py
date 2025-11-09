@@ -28,7 +28,7 @@ def parse_args():
     )
     
     parser.add_argument('--limit', '-l', type=int, help='Limit the number of results', default=10)
-    parser.add_argument('--model', '-m', type=str, help='Model to use (e.g., gpt-4o-mini, gemini-1.5-pro)')
+    parser.add_argument('--model', '-m', type=str, help='Model to use')
     parser.add_argument('--reset-cache', action='store_true', help='Reset the GUM cache and exit')  # Add this line
     
     # Batching configuration arguments

@@ -251,7 +251,7 @@ def create_provider(
     """Factory function to create the appropriate model provider.
     
     Args:
-        model (str): The model name (e.g., 'gpt-4o-mini', 'gemini-1.5-pro').
+        model (str): The model name.
         api_key (str, optional): API key for authentication.
         api_base (str, optional): Base URL for the API.
         
