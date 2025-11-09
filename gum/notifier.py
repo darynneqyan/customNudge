@@ -19,6 +19,44 @@ from .prompts.gum import NOTIFICATION_DECISION_PROMPT
 from .adaptive_nudge import ObservationWindowManager
 import re
 
+# PyObjC imports and delegate class (defined at module level to avoid redefinition errors)
+# THIS STUFF DEALS WITH THE NOTIFICATIONS DISPLAYING WITH BUTTONS AS BANNERS
+try:
+    from Foundation import NSUserNotification, NSUserNotificationCenter, NSObject
+    from AppKit import NSApp
+    import objc
+    
+    class NotificationDelegate(NSObject):
+        """Delegate class for handling NSUserNotification button clicks."""
+        notifier = None
+        
+        def userNotificationCenter_didActivateNotification_(self, center, notification):
+            """Handle notification interaction."""
+            user_info = notification.userInfo()
+            nudge_id = user_info.get("nudge_id", "unknown") if user_info else "unknown"
+            
+            # Check which button was clicked
+            activation_type = notification.activationType()
+            
+            if activation_type == 1:  # Action button clicked (Thanks!)
+                feedback = "thanks"
+            elif activation_type == 2:  # Other button clicked (Not now!)
+                feedback = "not_now"
+            else:
+                feedback = "no_response"
+            
+            # Store feedback
+            if self.notifier:
+                self.notifier.button_feedback[nudge_id] = feedback
+                self.notifier.session_stats[f"{feedback}_count"] += 1
+                self.notifier.logger.info(f"📊 User feedback for {nudge_id}: {feedback}")
+                self.notifier._update_satisfaction_multiplier()
+    
+    PYOJBC_AVAILABLE = True
+except ImportError:
+    PYOJBC_AVAILABLE = False
+    NotificationDelegate = None
+
 
 @dataclass
 class NotificationContext:
@@ -73,7 +111,22 @@ class GUMNotifier:
 
         # Cooldown configuration
         self.last_notification_time = None
-        self.min_notification_interval = 120 # 2 minutes in seconds
+        self.min_notification_interval = 180 # 3 minutes in seconds
+
+        # Session tracking
+        self.session_start_time = datetime.now()
+        
+        # Button feedback tracking (satisfaction score)
+        self.button_feedback: Dict[str, str] = {}  # {nudge_id: "thanks" | "not_now" | "no_response"}
+        self.session_stats = {
+            "thanks_count": 0,
+            "not_now_count": 0,
+            "no_response_count": 0,
+            "total_notifications": 0
+        }
+        
+        # Adaptive thresholds based on satisfaction
+        self.satisfaction_multiplier = 1.0  # Starts at normal, increases if user annoyed
     
     def _load_notification_log(self):
         """Load notification contexts from file."""
@@ -532,10 +585,16 @@ class GUMNotifier:
                         print(f"{'='*60}\n")
                         
                         # Display native macOS notification
-                        self._display_notification(decision.notification_message, decision.notification_type)
+                        # self._display_notification_with_buttons(decision.notification_message, decision.notification_type, context.observation_id)
+                        self._display_notification_with_buttons(
+                            decision.notification_message, 
+                            decision.notification_type,
+                            context.observation_id
+                        )
                         
                         # Track sent notification
                         self.sent_notifications.append({
+                            'nudge_id': context.observation_id, 
                             'timestamp': context.timestamp,
                             'message': decision.notification_message,
                             'type': decision.notification_type,
@@ -548,6 +607,7 @@ class GUMNotifier:
                         if self.adaptive_nudge_enabled:
                             try:
                                 nudge_data = {
+                                    'nudge_id': context.observation_id,
                                     'user_context': {
                                         'observation_content': context.observation_content,
                                         'generated_propositions': context.generated_propositions,
@@ -583,52 +643,43 @@ class GUMNotifier:
         self._save_notification_log()
         self.logger.info(f"Saved notification contexts to {self.contexts_file}")
     
-    def _display_notification(self, message: str, notification_type: str):
-        """Display a native macOS notification."""
-        try:
-            # Escape quotes in the message
-            escaped_message = message.replace('"', '\\"')
+    # def _display_notification(self, message: str, notification_type: str):
+    #     """Display a native macOS notification."""
+    #     try:
+    #         # Escape quotes in the message
+    #         escaped_message = message.replace('"', '\\"')
             
-            # Customize title based on notification type
-            title_map = {
-                'break': '⏰ Break Reminder',
-                'focus': '🎯 Focus Nudge', 
-                'productivity': '⚡ Productivity Tip',
-                'habit': '🔄 Habit Reminder',
-                'health': '💚 Health Nudge',
-                'general': '🔔 GUM Nudge'
-            }
+    #         # Customize title based on notification type
+    #         title_map = {
+    #             'break': '⏰ Break Reminder',
+    #             'focus': '🎯 Focus Nudge', 
+    #             'productivity': '⚡ Productivity Tip',
+    #             'habit': '🔄 Habit Reminder',
+    #             'health': '💚 Health Nudge',
+    #             'general': '🔔 GUM Nudge'
+    #         }
             
-            title = title_map.get(notification_type, '🔔 GUM Nudge')
-            escaped_title = title.replace('"', '\\"')
+    #         title = title_map.get(notification_type, '🔔 GUM Nudge')
+    #         escaped_title = title.replace('"', '\\"')
             
-            # Create the AppleScript command
-            script = f'''
-            display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
-            '''
+    #         # Create the AppleScript command
+    #         script = f'''
+    #         display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
+    #         '''
             
-            # Execute the notification
-            subprocess.run(['osascript', '-e', script], check=True, timeout=5)
-            self.logger.info(f"📢 Displayed notification: {title} - {message}")
+    #         # Execute the notification
+    #         subprocess.run(['osascript', '-e', script], check=True, timeout=5)
+    #         self.logger.info(f"📢 Displayed notification: {title} - {message}")
             
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"❌ Failed to display notification: {e}")
-        except subprocess.TimeoutExpired:
-            self.logger.error("❌ Notification display timed out")
-        except Exception as e:
-            self.logger.error(f"❌ Error displaying notification: {e}")
+    #     except subprocess.CalledProcessError as e:
+    #         self.logger.error(f"❌ Failed to display notification: {e}")
+    #     except subprocess.TimeoutExpired:
+    #         self.logger.error("❌ Notification display timed out")
+    #     except Exception as e:
+    #         self.logger.error(f"❌ Error displaying notification: {e}")
     
-    def get_recent_contexts(self, limit: int = 10) -> List[NotificationContext]:
-        """Get the most recent notification contexts."""
-        return self.notification_contexts[-limit:]
-    
-    def get_context_by_observation_id(self, observation_id: int) -> Optional[NotificationContext]:
-        """Get notification context for a specific observation."""
-        for context in reversed(self.notification_contexts):
-            if context.observation_id == observation_id:
-                return context
-        return None
-    
+    # --- that ends the initial notification display banner WITHOUT the buttons
+
     # ADAPTIVE NUDGE ENGINE METHODS
     
     def get_adaptive_nudge_statistics(self) -> Dict[str, Any]:
@@ -681,6 +732,322 @@ class GUMNotifier:
             self.logger.error(f"Error cancelling observation {nudge_id}: {e}")
             return False
     
+    # ========== ADD ALL THESE NEW METHODS HERE ==========
+    
+    # this is the notif display with buttons, but modal pop up window
+    # def _display_notification_with_buttons(self, message: str, notification_type: str, nudge_id: str):
+    #     """Display a native macOS notification with feedback buttons."""
+    #     try:
+    #         escaped_message = message.replace('"', '\\"').replace("'", "\\'")
+            
+    #         title_map = {
+    #             'break': '⏰ Break Reminder',
+    #             'focus': '🎯 Focus Nudge', 
+    #             'productivity': '⚡ Productivity Tip',
+    #             'habit': '🔄 Habit Reminder',
+    #             'health': '💚 Health Nudge',
+    #             'general': '🔔 GUM Nudge'
+    #         }
+            
+    #         title = title_map.get(notification_type, '🔔 GUM Nudge')
+    #         escaped_title = title.replace('"', '\\"').replace("'", "\\'")
+            
+    #         # AppleScript with buttons
+    #         script = f'''
+    #         try
+    #             set theResponse to button returned of (display alert "{escaped_title}" message "{escaped_message}" buttons {{"Thanks!", "Not now!"}} default button "Thanks!" giving up after 30)
+    #             return theResponse
+    #         on error
+    #             return "no_response"
+    #         end try
+    #         '''
+            
+    #         # Execute and capture button click
+    #         def show_alert_async():
+    #             try:
+    #                 result = subprocess.run(
+    #                     ['osascript', '-e', script], 
+    #                     capture_output=True, 
+    #                     text=True, 
+    #                     timeout=35
+    #                 )
+                    
+    #                 response = result.stdout.strip()
+    #                 if "Thanks!" in response:
+    #                     feedback = "thanks"
+    #                 elif "Not now!" in response:
+    #                     feedback = "not_now"
+    #                 else:
+    #                     feedback = "no_response"
+                    
+    #                 self.button_feedback[nudge_id] = feedback
+    #                 self.session_stats[f"{feedback}_count"] += 1
+                    
+    #                 self.logger.info(f"📊 User feedback for {nudge_id}: {feedback}")
+    #                 self._update_satisfaction_multiplier()
+                    
+    #             except subprocess.TimeoutExpired:
+    #                 self.button_feedback[nudge_id] = "no_response"
+    #                 self.session_stats["no_response_count"] += 1
+    #                 self.logger.info(f"⏱️ No response for {nudge_id} (timeout)")
+    #             except Exception as e:
+    #                 self.logger.error(f"❌ Error in alert: {e}")
+    #                 self.button_feedback[nudge_id] = "no_response"
+    #                 self.session_stats["no_response_count"] += 1
+            
+    #         import threading
+    #         thread = threading.Thread(target=show_alert_async, daemon=True)
+    #         thread.start()
+            
+    #         self.logger.info(f"📢 Displayed notification: {title}")
+            
+    #     except Exception as e:
+    #         self.logger.error(f"❌ Error displaying notification: {e}")
+
+    # this uses PyObjC to display the notification with buttons as a banner!!! 
+    def _display_notification_with_buttons(self, message: str, notification_type: str, nudge_id: str):
+        """Display a native macOS notification banner with feedback buttons."""
+        try:
+            # Try to use NSUserNotification for banner with buttons
+            if not PYOJBC_AVAILABLE:
+                # Fallback to simple banner without buttons
+                self.logger.warning("PyObjC not available - using simple banner notification")
+                self._display_simple_notification(message, notification_type)
+                
+                # Auto-mark as no_response since we can't get feedback
+                self.button_feedback[nudge_id] = "no_response"
+                self.session_stats["no_response_count"] += 1
+                return
+            
+            # Create notification
+            notification = NSUserNotification.alloc().init()
+            
+            # Set title and message
+            title_map = {
+                'break': '⏰ Break Reminder',
+                'focus': '🎯 Focus Nudge', 
+                'productivity': '⚡ Productivity Tip',
+                'habit': '🔄 Habit Reminder',
+                'health': '💚 Health Nudge',
+                'general': '🔔 GUM Nudge'
+            }
+            title = title_map.get(notification_type, '🔔 GUM Nudge')
+            
+            notification.setTitle_(title)
+            notification.setInformativeText_(message)
+            notification.setSoundName_("Glass")
+            
+            # Add action buttons
+            notification.setHasActionButton_(True)
+            notification.setActionButtonTitle_("Thanks!")
+            notification.setOtherButtonTitle_("Not now!")
+            
+            # Store nudge_id in userInfo for callback
+            notification.setUserInfo_({"nudge_id": nudge_id})
+            
+            # Set up delegate (only create once)
+            if not hasattr(self, '_notification_delegate'):
+                self._notification_delegate = NotificationDelegate.alloc().init()
+                self._notification_delegate.notifier = self
+                
+                center = NSUserNotificationCenter.defaultUserNotificationCenter()
+                center.setDelegate_(self._notification_delegate)
+            
+            # Deliver notification
+            center = NSUserNotificationCenter.defaultUserNotificationCenter()
+            center.deliverNotification_(notification)
+            
+            self.logger.info(f"📢 Displayed banner notification with buttons: {title}")
+            
+            # Set default feedback after 30 seconds
+            def set_default_feedback():
+                import time
+                time.sleep(30)
+                if nudge_id not in self.button_feedback:
+                    self.button_feedback[nudge_id] = "no_response"
+                    self.session_stats["no_response_count"] += 1
+                    self.logger.info(f"⏱️ No response for {nudge_id} (timeout)")
+            
+            import threading
+            thread = threading.Thread(target=set_default_feedback, daemon=True)
+            thread.start()
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error displaying notification: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            # Fallback to simple notification
+            try:
+                self._display_simple_notification(message, notification_type)
+                self.button_feedback[nudge_id] = "no_response"
+                self.session_stats["no_response_count"] += 1
+            except Exception as fallback_error:
+                self.logger.error(f"❌ Fallback notification also failed: {fallback_error}")
+
+    def _display_simple_notification(self, message: str, notification_type: str):
+        """Fallback: Display simple banner notification without buttons."""
+        try:
+            escaped_message = message.replace('"', '\\"')
+            
+            title_map = {
+                'break': '⏰ Break Reminder',
+                'focus': '🎯 Focus Nudge', 
+                'productivity': '⚡ Productivity Tip',
+                'habit': '🔄 Habit Reminder',
+                'health': '💚 Health Nudge',
+                'general': '🔔 GUM Nudge'
+            }
+            
+            title = title_map.get(notification_type, '🔔 GUM Nudge')
+            escaped_title = title.replace('"', '\\"')
+            
+            script = f'''
+            display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
+            '''
+            
+            subprocess.run(['osascript', '-e', script], check=True, timeout=5)
+            self.logger.info(f"📢 Displayed banner notification: {title}")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error displaying simple notification: {e}")
+    
+    def _update_satisfaction_multiplier(self):
+        """Update cooldown/threshold multiplier based on recent satisfaction."""
+        recent_feedback = list(self.button_feedback.values())[-10:]
+        
+        if len(recent_feedback) < 3:
+            return
+        
+        thanks_count = recent_feedback.count("thanks")
+        not_now_count = recent_feedback.count("not_now")
+        total_responses = thanks_count + not_now_count
+        
+        if total_responses == 0:
+            satisfaction_rate = 0.5
+        else:
+            satisfaction_rate = thanks_count / total_responses
+        
+        if satisfaction_rate < 0.3:
+            self.satisfaction_multiplier = 2.0
+            self.logger.warning(
+                f"😟 Low satisfaction rate ({satisfaction_rate:.1%}) - "
+                f"backing off (multiplier: {self.satisfaction_multiplier:.1f}x)"
+            )
+        elif satisfaction_rate < 0.5:
+            self.satisfaction_multiplier = 1.5
+            self.logger.info(
+                f"😐 Moderate satisfaction rate ({satisfaction_rate:.1%}) - "
+                f"reducing frequency (multiplier: {self.satisfaction_multiplier:.1f}x)"
+            )
+        elif satisfaction_rate > 0.7:
+            self.satisfaction_multiplier = 1.0
+            self.logger.info(
+                f"😊 High satisfaction rate ({satisfaction_rate:.1%}) - "
+                f"maintaining pace (multiplier: {self.satisfaction_multiplier:.1f}x)"
+            )
+        else:
+            self.satisfaction_multiplier = 0.9
+            self.logger.info(
+                f"🙂 Good satisfaction rate ({satisfaction_rate:.1%}) - "
+                f"normal operation (multiplier: {self.satisfaction_multiplier:.1f})"
+            )
+    
+    def get_satisfaction_score(self) -> float:
+        """Calculate current session satisfaction score."""
+        thanks = self.session_stats["thanks_count"]
+        not_now = self.session_stats["not_now_count"]
+        total_responses = thanks + not_now
+        
+        if total_responses == 0:
+            return 0.5
+        
+        return thanks / total_responses
+    
+    def _get_satisfaction_status(self, satisfaction_rate: float) -> str:
+        """Get human-readable satisfaction status."""
+        if satisfaction_rate < 0.3:
+            return "low_satisfaction_backing_off"
+        elif satisfaction_rate < 0.5:
+            return "moderate_satisfaction_reducing_frequency"
+        elif satisfaction_rate > 0.7:
+            return "high_satisfaction_maintaining_pace"
+        else:
+            return "good_satisfaction_normal_operation"
+    
+    def save_session_report(self):
+        """Save session statistics to a timestamped JSON file."""
+        try:
+            session_dir = Path(self.gum_instance._data_directory) / "session_reports"
+            session_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            user_slug = self.user_name.lower().replace(' ', '_')
+            filename = f"session_report_{user_slug}_{timestamp}.json"
+            filepath = session_dir / filename
+            
+            satisfaction_rate = self.get_satisfaction_score()
+            total = self.session_stats['total_notifications']
+            
+            report_data = {
+                "session_metadata": {
+                    "user_name": self.user_name,
+                    "start_time": self.session_start_time.isoformat(),
+                    "end_time": datetime.now().isoformat(),
+                    "duration_seconds": (datetime.now() - self.session_start_time).total_seconds()
+                },
+                "notification_stats": {
+                    "total_notifications": total,
+                    "thanks_count": self.session_stats['thanks_count'],
+                    "not_now_count": self.session_stats['not_now_count'],
+                    "no_response_count": self.session_stats['no_response_count']
+                },
+                "rates": {
+                    "thanks_rate": self.session_stats['thanks_count'] / max(1, total),
+                    "not_now_rate": self.session_stats['not_now_count'] / max(1, total),
+                    "no_response_rate": self.session_stats['no_response_count'] / max(1, total),
+                    "satisfaction_score": satisfaction_rate
+                },
+                "adaptive_behavior": {
+                    "final_multiplier": self.satisfaction_multiplier,
+                    "status": self._get_satisfaction_status(satisfaction_rate)
+                },
+                "notification_details": [
+                    {
+                        "nudge_id": notif.get('nudge_id', 'unknown'),
+                        "timestamp": notif['timestamp'],
+                        "type": notif['type'],
+                        "message": notif['message'],
+                        "scores": {
+                            "relevance": notif['relevance'],
+                            "goal_relevance": notif.get('goal_relevance'),
+                            "urgency": notif['urgency'],
+                            "impact": notif['impact']
+                        },
+                        "button_feedback": self.button_feedback.get(notif.get('nudge_id', ''), 'no_response')
+                    }
+                    for notif in self.sent_notifications
+                ]
+            }
+            
+            with open(filepath, 'w') as f:
+                json.dump(report_data, f, indent=2)
+            
+            self.logger.info(f"💾 Session report saved to: {filepath}")
+            print(f"\n{'='*60}")
+            print(f"📊 SESSION REPORT SAVED")
+            print(f"{'='*60}")
+            print(f"Location: {filepath}")
+            print(f"Satisfaction Score: {satisfaction_rate:.1%}")
+            print(f"Total Notifications: {total}")
+            print(f"{'='*60}\n")
+            
+            return str(filepath)
+            
+        except Exception as e:
+            self.logger.error(f"Error saving session report: {e}")
+            return None
+    # ===================================================
+    
     def _is_in_cooldown(self) -> tuple[bool, float]:
         """
         Check if we're in cooldown period since last notification.
@@ -691,13 +1058,16 @@ class GUMNotifier:
         if self.last_notification_time is None:
             return False, 0.0
         
+        # Apply satisfaction multiplier to cooldown
+        adaptive_cooldown = self.min_notification_interval * self.satisfaction_multiplier
+        
         time_since_last = (datetime.now() - self.last_notification_time).total_seconds()
         
-        if time_since_last < self.min_notification_interval:
-            remaining = self.min_notification_interval - time_since_last
+        if time_since_last < adaptive_cooldown:
+            remaining = adaptive_cooldown - time_since_last
             self.logger.info(
                 f"Cooldown active: {time_since_last:.0f}s since last notification "
-                f"({remaining:.0f}s remaining)"
+                f"({remaining:.0f}s remaining, adaptive cooldown: {adaptive_cooldown:.0f}s)"
             )
             return True, remaining
         

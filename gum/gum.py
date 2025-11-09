@@ -200,6 +200,13 @@ class gum:
             exc: The exception instance if any.
             tb: The traceback if any.
         """
+        # ========== ADD THIS ==========
+        # Save notification session report before stopping
+        if self.notifier and self.notifier.session_stats["total_notifications"] > 0:
+            self.notifier.save_session_report()
+        # ==============================
+        
+        # Save user goal to database if provided
         await self.stop_update_loop()
 
         # stop observers
