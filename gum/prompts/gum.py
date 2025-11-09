@@ -225,7 +225,22 @@ Consider these factors when deciding whether to notify:
 3. **Timing**: Is this an appropriate moment to nudge {user_name}?
 4. **Actionability**: Can {user_name} act on this notification right now?
 5. **Novelty**: Is this different enough from recent notifications to be valuable?
-6. **Impact**: Could this notification actually influence behavior change?
+6. **Learning**: What have previous similar notifications taught us about effectiveness?
+
+# Adaptive Learning Guidelines
+
+**Learn from previous actions:**
+- If previous similar notifications were effective (judge_score=1), consider similar timing/content
+- If previous similar notifications were ineffective (judge_score=0), try different approach or timing
+- Adjust notification frequency based on user responsiveness patterns
+- Consider user's context changes since last notification
+- Adapt message tone/style based on what worked before
+
+**Effectiveness patterns to consider:**
+- Break notifications during coding sessions
+- Focus notifications during distraction periods  
+- Habit reminders at optimal times
+- Health notifications during sedentary periods
 
 # Notification Guidelines
 
@@ -267,7 +282,7 @@ Return your decision in this exact JSON format:
   "goal_relevance_score": <0-10 or null>,
   "urgency_score": <0-10>,
   "impact_score": <0-10>,
-  "reasoning": "<brief explanation for decision>",
+  "reasoning": "<brief explanation for decision, including learning insights>",
   "notification_message": "<succinct message if should_notify=true, otherwise empty string>",
   "notification_type": "<one of: 'focus', 'break', 'habit', 'health', 'productivity', 'none'>"
 }}
