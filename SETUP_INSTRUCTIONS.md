@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Python 3.11+ installed
-- macOS with Accessibility Permissions granted to Terminal and Python
+- macOS with Accessibility Permissions granted to Terminal and Python Launcher
 - Google AI Studio API key: `AIzaSyBKYsQ77txAwduIif62yQPanVx2QYG7CuE`
 
 ## Installation Steps
@@ -57,7 +57,7 @@ execution error: System Events got an error: Can't get frontmost of window. (-17
 
 This is handled gracefully—the system will continue without window titles. To enable full functionality:
 1. Go to System Settings → Privacy & Security → Accessibility
-2. Grant permissions to Terminal and Python
+2. Grant permissions to Terminal and Python Launcher
 
 ## Current Known Issue
 
