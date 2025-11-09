@@ -141,13 +141,13 @@ class GUMNotifier:
             
             # Build learning context
             learning_context = f"""
-**Effectiveness Analysis:**
-- Recent {notification_type or 'all'} notifications: {len(relevant_entries)}
-- Effective: {effective_count} ({effectiveness_rate:.1%})
-- Ineffective: {ineffective_count}
+            **Effectiveness Analysis:**
+            - Recent {notification_type or 'all'} notifications: {len(relevant_entries)}
+            - Effective: {effective_count} ({effectiveness_rate:.1%})
+            - Ineffective: {ineffective_count}
 
-**Recent Patterns:**
-"""
+            **Recent Patterns:**
+            """
             for pattern in recent_patterns:
                 status = "✅ Effective" if pattern['effective'] else "❌ Ineffective"
                 learning_context += f"- [{pattern['timestamp']}] {pattern['type']}: {status}\n  Reasoning: {pattern['reasoning']}\n"
