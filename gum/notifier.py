@@ -66,7 +66,7 @@ class GUMNotifier:
         self.decisions_file = Path(f"notification_decisions_{user_name.lower().replace(' ', '_')}.json")
         
         # Initialize Adaptive Nudge Engine
-        self.observation_manager = ObservationWindowManager(user_name)
+        self.observation_manager = ObservationWindowManager(user_name, gum_instance=self.gum_instance, notifier=self)
         self.adaptive_nudge_enabled = True  # Can be controlled via environment variable
         
         # Load existing contexts if available
@@ -183,7 +183,8 @@ class GUMNotifier:
                 'observation_content': context.observation_content[:200] + "...",
                 'generated_propositions_count': len(context.generated_propositions),
                 'similar_propositions_count': len(context.similar_propositions),
-                'similar_observations_count': len(context.similar_observations)
+                'similar_observations_count': len(context.similar_observations),
+                'blocked_reason': None  # Will be set if blocked by cooldown
             }
             
             self.decisions_log.append(decision_entry)
@@ -196,6 +197,56 @@ class GUMNotifier:
             self.logger.error(f"Error saving decision: {e}")
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
+    
+    def _update_decision_with_cooldown(self, context: NotificationContext, remaining: float):
+        """Update the most recent decision entry with cooldown information."""
+        try:
+            if self.decisions_log:
+                # Update the most recent decision entry
+                last_decision = self.decisions_log[-1]
+                if last_decision.get('observation_id') == context.observation_id:
+                    last_decision['blocked_reason'] = 'COOLDOWN'
+                    last_decision['cooldown_remaining'] = remaining
+                    last_decision['should_notify'] = False  # Mark as not sent due to cooldown
+                    
+                    # Save updated decision
+                    with open(self.decisions_file, 'w') as f:
+                        json.dump(self.decisions_log, f, indent=2)
+                    self.logger.info(f"Updated decision with cooldown information")
+        except Exception as e:
+            self.logger.error(f"Error updating decision with cooldown: {e}")
+    
+    def update_decision_with_effectiveness(self, nudge_id: str, judge_score: Dict[str, Any]):
+        """
+        Update a decision entry with effectiveness evaluation results.
+        
+        Args:
+            nudge_id: The nudge ID to match
+            judge_score: Dictionary containing:
+                - score: 0, 0.5, or 1
+                - reasoning: LLM's reasoning
+                - compliance_percentage: Percentage of goal-aligned snapshots
+                - pattern: "Compliant", "Partially Compliant", or "Non-Compliant"
+        """
+        try:
+            # Find decision entry by nudge_id
+            for decision in self.decisions_log:
+                if decision.get('nudge_id') == nudge_id:
+                    decision['effectiveness_score'] = judge_score.get('score', 0)
+                    decision['effectiveness_reasoning'] = judge_score.get('reasoning', '')
+                    decision['compliance_percentage'] = judge_score.get('compliance_percentage', 0)
+                    decision['compliance_pattern'] = judge_score.get('pattern', 'Unknown')
+                    decision['evaluation_source'] = 'system_capture' if judge_score.get('pattern') == 'Compliant' else 'observations'
+                    
+                    # Save updated decision
+                    with open(self.decisions_file, 'w') as f:
+                        json.dump(self.decisions_log, f, indent=2)
+                    self.logger.info(f"Updated decision {nudge_id} with effectiveness data")
+                    return
+            
+            self.logger.warning(f"Could not find decision entry with nudge_id: {nudge_id}")
+        except Exception as e:
+            self.logger.error(f"Error updating decision with effectiveness: {e}")
     
     
     async def _find_similar_propositions(self, propositions: List[Proposition], 
@@ -364,6 +415,13 @@ class GUMNotifier:
         else:
             user_goal_text = f"{self.user_name} has not set a specific goal for this session. Consider general behavioral patterns and what they likely want to improve."
         
+        # Get cooldown status for LLM
+        in_cooldown, remaining = self._is_in_cooldown()
+        if in_cooldown:
+            cooldown_status = f"⚠️ COOLDOWN ACTIVE: A notification was sent {remaining:.0f} seconds ago. You MUST set `should_notify` to `false` and explain in your reasoning that the reason is cooldown - too soon since last notification."
+        else:
+            cooldown_status = "✅ Cooldown inactive: No notification sent in the last 2 minutes. Ready to send if observation is relevant."
+        
         # Construct prompt
         prompt = NOTIFICATION_DECISION_PROMPT.format(
             user_name=self.user_name,
@@ -373,7 +431,8 @@ class GUMNotifier:
             similar_propositions=sim_props_text,
             similar_observations=sim_obs_text,
             notification_history=notif_history_text,
-            learning_context=learning_context
+            learning_context=learning_context,
+            cooldown_status=cooldown_status
         )
         
         try:
@@ -526,6 +585,10 @@ class GUMNotifier:
                         f"Impact: {decision.impact_score}/10"
                     )
                     
+                    # Check if LLM mentioned cooldown in reasoning
+                    reasoning_lower = decision.reasoning.lower()
+                    is_cooldown_reason = 'cooldown' in reasoning_lower or 'too soon' in reasoning_lower or 'recently sent' in reasoning_lower
+                    
                     # Print to console
                     print(f"\n{'='*60}")
                     print(f"LLM NOTIFICATION DECISION")
@@ -539,13 +602,20 @@ class GUMNotifier:
                     print(f"Impact: {decision.impact_score}/10")
                     print(f"Reasoning: {decision.reasoning}")
                     
+                    # If LLM mentioned cooldown as reason, display it prominently
+                    if is_cooldown_reason and not decision.should_notify:
+                        print(f"\n⏱️  REASON: COOLDOWN - LLM decided not to notify due to cooldown period")
+                    
                     if decision.should_notify:
+                        # Safety check: if LLM says should_notify=True but we're in cooldown, block it
                         in_cooldown, remaining = self._is_in_cooldown()
                         if in_cooldown:
-                            print(f"NOTIFICATION BLOCKED - Cooldown ({remaining:.0f}s remaining)")
+                            print(f"\n⚠️  WARNING: LLM said should_notify=True but cooldown is active. Blocking notification.")
+                            print(f"Cooldown remaining: {remaining:.0f}s")
                             print(f"{'='*60}\n")
+                            # Update saved decision with cooldown reason
+                            self._update_decision_with_cooldown(context, remaining)
                             continue
-
                         print(f"\n📢 NOTIFICATION MESSAGE:")
                         print(f"{decision.notification_message}")
                         print(f"{'='*60}\n")
@@ -582,12 +652,24 @@ class GUMNotifier:
                                     },
                                     'nudge_content': decision.notification_message,
                                     'nudge_type': decision.notification_type,
-                                    'observation_duration': 120  # 2 minutes
+                                    'observation_duration': 120,  # 2 minutes
+                                    'decision_timestamp': context.timestamp,  # For matching decision entry
+                                    'decision_file': str(self.decisions_file)  # For updating decision entry
                                 }
                                 
                                 # Start observation window asynchronously
-                                asyncio.create_task(self.observation_manager.start_observation(nudge_data))
-                                self.logger.info("Started adaptive nudge observation window")
+                                nudge_id = await self.observation_manager.start_observation(nudge_data)
+                                
+                                # Add nudge_id to the most recent decision entry
+                                if self.decisions_log:
+                                    last_decision = self.decisions_log[-1]
+                                    if last_decision.get('timestamp') == context.timestamp:
+                                        last_decision['nudge_id'] = nudge_id
+                                        # Save updated decision
+                                        with open(self.decisions_file, 'w') as f:
+                                            json.dump(self.decisions_log, f, indent=2)
+                                
+                                self.logger.info(f"Started adaptive nudge observation window with nudge_id: {nudge_id}")
                                 
                             except Exception as e:
                                 self.logger.error(f"Error starting adaptive nudge observation: {e}")
