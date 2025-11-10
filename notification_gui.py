@@ -72,7 +72,7 @@ class NotificationGUI:
         
         title = tk.Label(
             header,
-            text="🔔 GUM Behavioral Nudges",
+            text="🔔 customNudge Decisions",
             font=("Arial", 20, "bold"),
             bg="#2c3e50",
             fg="white"
@@ -111,7 +111,7 @@ class NotificationGUI:
             text="🔄 Refresh",
             command=self.refresh,
             bg="#3498db",
-            fg="white",
+            fg="black",
             font=("Arial", 10, "bold"),
             padx=15
         ).pack(side=tk.LEFT, padx=10)
@@ -127,7 +127,7 @@ class NotificationGUI:
     def setup_decisions_tab(self):
         """Setup the Notification Decisions tab."""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="📋 Notification Decisions")
+        self.notebook.add(frame, text="📋")
         
         canvas = tk.Canvas(frame)
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
@@ -433,21 +433,36 @@ class NotificationGUI:
                     decisions = json.load(f)
                 
                 current_count = len(decisions)
-                if current_count > self.last_count:
-                    # Clear existing widgets and reload everything in reverse order
-                    self.clear_all_widgets()
-                    
-                    # Load all decisions in reverse order (newest first)
-                    for decision in reversed(decisions):
-                        self.add_decision(decision)
-                        if decision.get('should_notify'):
-                            self.sent_count += 1
-                    
-                    self.last_count = current_count
-                    self.count_label.config(text=f"Decisions: {current_count} | Sent: {self.sent_count}")
+                previous_count = self.last_count
+                
+                # Always refresh when refresh button is clicked or if there are new decisions
+                self.clear_all_widgets()
+                
+                # Load all decisions in reverse order (newest first)
+                for decision in reversed(decisions):
+                    self.add_decision(decision)
+                    if decision.get('should_notify'):
+                        self.sent_count += 1
+                
+                new_decisions = current_count - previous_count
+                self.last_count = current_count
+                self.count_label.config(text=f"Decisions: {current_count} | Sent: {self.sent_count}")
+                
+                # Status messaging for 3 cases
+                if new_decisions > 0:
                     self.status_label.config(
-                        text=f"✅ {current_count - (self.last_count - len(decisions))} new decision(s)",
+                        text=f"✅ {new_decisions} new decision(s) | Last updated: {datetime.now().strftime('%I:%M:%S %p')}",
                         fg="#27ae60"
+                    )
+                elif new_decisions == 0 and current_count > 0:
+                    self.status_label.config(
+                        text=f"✅ Refreshed | {current_count} total decision(s) | Last updated: {datetime.now().strftime('%I:%M:%S %p')}",
+                        fg="#27ae60"
+                    )
+                else:
+                    self.status_label.config(
+                        text=f"✅ No decisions yet | Last updated: {datetime.now().strftime('%I:%M:%S %p')}",
+                        fg="#7f8c8d"
                     )
             except Exception as e:
                 self.status_label.config(text=f"Error loading decisions: {e}", fg="#e74c3c")
