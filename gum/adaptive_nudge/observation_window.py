@@ -2,7 +2,7 @@
 """
 Observation Window Management for Adaptive Nudge Engine
 
-Manages the 3-minute observation period after nudge delivery to capture
+Manages the 2-minute observation period after nudge delivery to capture
 user behavior and evaluate nudge effectiveness.
 
 Goal: Implement asynchronous observation windows that don't block the main
@@ -31,7 +31,7 @@ class NudgeObservation:
     timestamp: datetime
     user_context: Dict[str, Any]
     nudge_content: str
-    observation_duration: int = 180  # 3 minutes in seconds (changed from 5 minutes)
+    observation_duration: int = 120  # 2 minutes 
     callback: Optional[Callable] = None
 
 class ObservationWindowManager:
@@ -76,7 +76,7 @@ class ObservationWindowManager:
                 - user_context: Context about the user's state when nudge was sent
                 - nudge_content: The actual nudge message
                 - nudge_type: Type of nudge (focus, break, habit, etc.)
-                - observation_duration: Duration in seconds (defaults to 180)
+                - observation_duration: Duration in seconds (defaults to 120)
         
         Returns:
             str: Unique observation ID for tracking
@@ -91,7 +91,7 @@ class ObservationWindowManager:
                 timestamp=datetime.now(),
                 user_context=nudge_data.get('user_context', {}),
                 nudge_content=nudge_data.get('nudge_content', ''),
-                observation_duration=nudge_data.get('observation_duration', 180)  # 3 minutes default
+                observation_duration=nudge_data.get('observation_duration', 120)  # 2 minutes default
             )
             
             # Store active observation

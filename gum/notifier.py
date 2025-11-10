@@ -74,7 +74,7 @@ class GUMNotifier:
 
         # Cooldown configuration
         self.last_notification_time = None
-        self.min_notification_interval = 120 # 2 minutes in seconds
+        self.min_notification_interval = 120 # 2 minutes
     
     def _load_notification_log(self):
         """Load notification contexts from file."""
@@ -553,6 +553,9 @@ class GUMNotifier:
                         # Display native macOS notification
                         self._display_notification(decision.notification_message, decision.notification_type)
                         
+                        # Update cooldown timer
+                        self.last_notification_time = datetime.now()
+                        
                         # Track sent notification
                         self.sent_notifications.append({
                             'timestamp': context.timestamp,
@@ -579,7 +582,7 @@ class GUMNotifier:
                                     },
                                     'nudge_content': decision.notification_message,
                                     'nudge_type': decision.notification_type,
-                                    'observation_duration': 180  # 3 minutes
+                                    'observation_duration': 120  # 2 minutes
                                 }
                                 
                                 # Start observation window asynchronously
