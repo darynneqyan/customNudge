@@ -52,7 +52,7 @@ class LLMJudge:
 # Task
 You will be given:
 1. A nudge message that was sent to the user
-2. A "screenshot" of their system state after the nudge (captured 3 minutes later)
+2. A "screenshot" of their system state after the nudge (captured 2 minutes later)
 
 Your job is to evaluate whether the user's actions suggest they followed the nudge's suggestion.
 
@@ -76,7 +76,7 @@ Your job is to evaluate whether the user's actions suggest they followed the nud
 2. **Consider Context**: Look for subtle changes that might indicate compliance
 3. **Avoid False Positives**: Don't assume unrelated activities are responses to the nudge
 4. **Focus on Intent**: Consider whether the user's actions align with the nudge's goal
-5. **Time Sensitivity**: Remember this was captured 3 minutes after the nudge
+5. **Time Sensitivity**: Remember this was captured 2 minutes after the nudge
 6. **Application Context**: Consider what applications the user is using and whether they align with the nudge
 7. **Web Activity**: Look at browser tabs and URLs for evidence of following suggestions
 8. **File Activity**: Consider open files and recent applications for work-related nudges
