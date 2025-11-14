@@ -3,7 +3,7 @@
 ## Prerequisites
 - Python 3.11+ installed
 - macOS with Accessibility Permissions granted to Terminal and Python Launcher
-- Google AI Studio API key: `AIzaSyBKYsQ77txAwduIif62yQPanVx2QYG7CuE`
+- Google AI studio API key
 
 ## Installation Steps
 
@@ -17,23 +17,75 @@ cd /path/to/customNudge
 pip install pillow mss pynput shapely pyobjc-framework-Quartz openai SQLAlchemy pydantic sqlalchemy-utils python-dotenv scikit-learn aiosqlite greenlet persist-queue
 ```
 
-### 3. Set API Key
+### 3. Build Swift Notifier
+The notification system requires a Swift binary to be built first:
 ```bash
-export GOOGLE_API_KEY="AIzaSyBKYsQ77txAwduIif62yQPanVx2QYG7CuE"
+cd notifier/swift_notifier
+./build.sh
+cd ../..
 ```
 
-**Note:** You must set this environment variable in the same shell session where you run the GUM system, or include it directly in the command (see step 4).
+This creates the `GUM Notifier.app` bundle that handles interactive notifications.
 
-### 4. Start GUM System
+### 4. Configure macOS System Settings
+
+**⚠️ IMPORTANT: Do this BEFORE running the GUM system for the first time.**
+
+#### A. Notification Permissions
+
+The GUM Notifier app needs permission to display notifications:
+
+1. **First, trigger the permission request** by running the notifier once:
+   ```bash
+   cd notifier/swift_notifier
+   ./mac_notifier "Test" "Permission check"
+   cd ../..
+   ```
+
+2. **Grant notification permissions:**
+   - Open **System Settings** (or **System Preferences** on older macOS)
+   - Navigate to **Notifications & Focus** (or **Notifications** on older macOS)
+   - Find **"GUM Notifier"** in the list of apps
+   - Enable **"Allow Notifications"**
+   - Set **Alert Style** to **"Banners"** or **"Alerts"** (both work)
+   - Optionally enable **"Show in Notification Center"** and **"Play sound for notifications"**
+
+3. **Verify permissions:**
+   ```bash
+   cd notifier/swift_notifier
+   ./mac_notifier "Test" "Does this work?"
+   cd ../..
+   ```
+   If you see a notification with "Thanks!" and "Not now" buttons, permissions are correctly configured.
+
+#### B. Accessibility Permissions (Optional but Recommended)
+
+For full functionality including window title capture:
+
+1. Open **System Settings** → **Privacy & Security** → **Accessibility**
+2. Enable permissions for:
+   - **Terminal** (or your terminal app)
+   - **Python Launcher** (or the Python interpreter you're using)
+
+**Note:** The system will work without Accessibility permissions, but window titles won't be captured.
+
+### 5. Set API Key
 ```bash
-export GOOGLE_API_KEY="AIzaSyBKYsQ77txAwduIif62yQPanVx2QYG7CuE" && python -m gum.cli -u "Eyrin" --enable-notifications --model "gemini-2.5-flash" &
+export GOOGLE_API_KEY=""
+```
+
+**Note:** You must set this environment variable in the same shell session where you run the GUM system, or include it directly in the command (see step 6).
+
+### 6. Start GUM System
+```bash
+export GOOGLE_API_KEY="" && python -m gum.cli -u "Eyrin" --enable-notifications --model "gemini-2.5-flash"
 ```
 
 **Model Selection:** The system uses `gemini-2.5-flash` for all LLM operations (proposition generation, nudge decisions, and effectiveness evaluation).
 
-### 5. Start Notification GUI
+### 7. Start Notification GUI
 ```bash
-python notification_gui.py Eyrin &
+python notification_gui.py Eyrin
 ```
 
 This opens a GUI window that displays notification decisions in real-time.
@@ -50,14 +102,25 @@ python -m gum.cli -u "Eyrin" --enable-notifications --model "gemini-2.5-flash" -
 - `--max-batch-size`: Maximum observations per batch (default: 50)
 
 ### macOS Permissions
+
+#### Notification Permissions (Required)
+The GUM Notifier requires notification permissions to display interactive nudges. See **Step 4** in the Installation Steps above for detailed instructions.
+
+**Quick Setup:**
+1. Run the notifier once to trigger permission request: `./notifier/swift_notifier/mac_notifier "Test" "Permission check"`
+2. Go to **System Settings** → **Notifications & Focus**
+3. Find **"GUM Notifier"** and enable **"Allow Notifications"**
+4. Set **Alert Style** to **"Banners"** or **"Alerts"**
+
+#### Accessibility Permissions (Optional)
 The system requires Accessibility permissions to capture window titles. If you see errors like:
 ```
 execution error: System Events got an error: Can't get frontmost of window. (-1728)
 ```
 
 This is handled gracefully—the system will continue without window titles. To enable full functionality:
-1. Go to System Settings → Privacy & Security → Accessibility
-2. Grant permissions to Terminal and Python Launcher
+1. Go to **System Settings** → **Privacy & Security** → **Accessibility**
+2. Grant permissions to **Terminal** and **Python Launcher**
 
 ## Current Known Issue
 
@@ -109,10 +172,29 @@ rm -rf ~/.cache/gum/batches/queue/*
 ```
 
 ### No Notifications Appearing
-1. Check that batch processing is running (see "Current Known Issue" above)
-2. Verify observations are being collected: check queue size in logs
-3. Wait for minimum batch size to be reached before processing begins
-4. Check notification GUI window for decision logs
+1. **Verify notification permissions are granted:**
+   - Go to **System Settings** → **Notifications & Focus**
+   - Ensure **"GUM Notifier"** has **"Allow Notifications"** enabled
+   - Test manually: `./notifier/swift_notifier/mac_notifier "Test" "Does this work?"`
+   
+2. **Check that batch processing is running** (see "Current Known Issue" above)
+3. **Verify observations are being collected:** check queue size in logs
+4. **Wait for minimum batch size to be reached** before processing begins
+5. **Check notification GUI window** for decision logs
+6. **Check logs for Swift notifier errors:**
+   ```bash
+   tail -f ~/.cache/gum/logs/gum.log | grep -i "swift\|notif\|fallback"
+   ```
+
+### Notification Permission Errors
+If you see errors like `"Notifications denied"` or `"Authorization error"`:
+1. Rebuild the Swift notifier: `cd notifier/swift_notifier && ./build.sh`
+2. Grant permissions in **System Settings** → **Notifications & Focus** → **GUM Notifier**
+3. Test the notifier directly: `./notifier/swift_notifier/mac_notifier "Test" "Permission check"`
+4. If permissions still don't work, try removing and re-adding the app:
+   - Remove from System Settings
+   - Rebuild: `cd notifier/swift_notifier && ./build.sh`
+   - Run again to trigger new permission request
 
 ## Data Locations
 

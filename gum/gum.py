@@ -206,6 +206,13 @@ class gum:
         if self.user_goal:
             await self._save_user_goal()
         
+        # Run Swift binary diagnostics if notifier is enabled (one-time check)
+        if self.notifier and hasattr(self.notifier, 'test_swift_binary_diagnostics'):
+            try:
+                await self.notifier.test_swift_binary_diagnostics()
+            except Exception as e:
+                self.logger.warning(f"Swift binary diagnostics failed: {e}")
+        
         # Observation loop
         self.start_update_loop()
         

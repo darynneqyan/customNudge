@@ -12,64 +12,13 @@ import json
 from pathlib import Path
 import asyncio
 import subprocess
+import uuid
 
 from .db_utils import search_propositions_bm25, search_observations_bm25, get_related_propositions
 from .models import Observation, Proposition
 from .prompts.gum import NOTIFICATION_DECISION_PROMPT
 from .adaptive_nudge import ObservationWindowManager
 import re
-
-# PyObjC imports for macOS notifications with buttons
-try:
-    from Foundation import NSUserNotification, NSUserNotificationCenter, NSObject
-    from AppKit import NSApplication
-    import objc
-    
-    class NotificationDelegate(NSObject):
-        """Delegate for handling notification button clicks."""
-        
-        def userNotificationCenter_didActivateNotification_(self, center, notification):
-            """Handle notification interaction."""
-            try:
-                user_info = notification.userInfo()
-                nudge_id = user_info.get("nudge_id", "unknown") if user_info else "unknown"
-                activation_type = notification.activationType()
-                
-                # Get the notifier instance from the delegate
-                if hasattr(self, 'notifier') and self.notifier:
-                    if activation_type == 1:  # Action button (Thanks!)
-                        feedback = "thanks"
-                    elif activation_type == 2:  # Other button (Not now!)
-                        feedback = "not_now"
-                    else:
-                        feedback = "no_response"
-                    
-                    # Store feedback
-                    if not hasattr(self.notifier, 'button_feedback'):
-                        self.notifier.button_feedback = {}
-                    if not hasattr(self.notifier, 'session_stats'):
-                        self.notifier.session_stats = {
-                            "thanks_count": 0,
-                            "not_now_count": 0,
-                            "no_response_count": 0,
-                            "total_notifications": 0
-                        }
-                    
-                    self.notifier.button_feedback[nudge_id] = feedback
-                    self.notifier.session_stats[f"{feedback}_count"] = self.notifier.session_stats.get(f"{feedback}_count", 0) + 1
-                    self.notifier.logger.info(f"📊 User feedback for {nudge_id}: {feedback}")
-                    self.notifier._update_satisfaction_multiplier()
-                    
-            except Exception as e:
-                if hasattr(self, 'notifier') and self.notifier:
-                    self.notifier.logger.error(f"Error in notification delegate: {e}")
-    
-    PYOBJC_AVAILABLE = True
-    
-except ImportError:
-    PYOBJC_AVAILABLE = False
-    NotificationDelegate = None
-
 
 @dataclass
 class NotificationContext:
@@ -92,7 +41,6 @@ class NotificationDecision:
     reasoning: str
     notification_message: str
     notification_type: str
-
 
 class GUMNotifier:
     """Simple notification system that uses BM25 to find similar propositions and observations."""
@@ -565,13 +513,22 @@ class GUMNotifier:
                 # Store context
                 self.notification_contexts.append(context)
                 
-                # Use LLM to decide whether to notify
-                decision = await self._make_notification_decision(
-                    observation_content,
-                    generated_props_dict,
-                    similar_propositions,
-                    similar_observations
-                )
+                # Use LLM to decide whether to notify (timeout protects against slow API responses)
+                try:
+                    decision = await asyncio.wait_for(
+                        self._make_notification_decision(
+                            observation_content,
+                            generated_props_dict,
+                            similar_propositions,
+                            similar_observations
+                        ),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.error(
+                        f"⚠️ LLM decision timed out for observation {observation_id}; skipping notification"
+                    )
+                    decision = None
                 
                 if decision:
                     self.logger.info(f"LLM made a decision: should_notify={decision.should_notify}")
@@ -612,14 +569,18 @@ class GUMNotifier:
                         print(f"{decision.notification_message}")
                         print(f"{'='*60}\n")
                         
-                        # Display native macOS notification
-                        self._display_notification(decision.notification_message, decision.notification_type)
+                        # previously:
+                        # # Display native macOS notification
+                        # self._display_notification(decision.notification_message, decision.notification_type)
+
+                        nudge_id = str(uuid.uuid4())
                         
                         # Update cooldown timer
                         self.last_notification_time = datetime.now()
                         
-                        # Track sent notification
+                        # Track sent notification (before displaying, so it's logged even if display fails)
                         self.sent_notifications.append({
+                            'nudge_id': nudge_id,
                             'timestamp': context.timestamp,
                             'message': decision.notification_message,
                             'type': decision.notification_type,
@@ -628,6 +589,17 @@ class GUMNotifier:
                             'urgency': decision.urgency_score,
                             'impact': decision.impact_score
                         })
+                        
+                        # Display notification asynchronously (non-blocking)
+                        # Start the notification task but don't wait for it - batch processing continues immediately
+                        asyncio.create_task(
+                            self._display_notification_with_swift_async(
+                                decision.notification_message,
+                                decision.notification_type,
+                                nudge_id
+                            )
+                        )
+                        self.logger.info(f"📢 Notification task started for nudge {nudge_id} (non-blocking)")
                         
                         # ADAPTIVE NUDGE ENGINE: Start observation window
                         if self.adaptive_nudge_enabled:
@@ -668,11 +640,92 @@ class GUMNotifier:
         self._save_notification_log()
         self.logger.info(f"Saved notification contexts to {self.contexts_file}")
     
-    def _display_notification(self, message: str, notification_type: str):
-        """Display a native macOS notification."""
+    def _get_swift_notifier_path(self) -> Path:
+        """Get the path to the Swift notifier binary."""
+        # Get the directory where this file is located
+        current_file = Path(__file__).resolve()
+        # Navigate to project root (gum/notifier.py -> gum -> project_root)
+        project_root = current_file.parent.parent
+        swift_notifier_dir = project_root / "notifier" / "swift_notifier"
+        
+        # Try app bundle first (preferred for macOS recognition)
+        app_bundle = swift_notifier_dir / "GUM Notifier.app"
+        app_binary = app_bundle / "Contents" / "MacOS" / "GUM Notifier"
+        if app_binary.exists():
+            return app_binary
+        
+        # Fallback to standalone binary (symlink or direct)
+        standalone_binary = swift_notifier_dir / "mac_notifier"
+        if standalone_binary.exists():
+            return standalone_binary
+        
+        # Return the app bundle path even if it doesn't exist (for error messages)
+        return app_binary
+    
+    def _start_notification_task(self, message: str, notification_type: str, nudge_id: str):
+        """
+        Start a notification task in the background without blocking.
+        
+        This method immediately starts the notification display process and returns,
+        allowing batch processing to continue. Feedback is collected asynchronously.
+        
+        Args:
+            message: The notification message content
+            notification_type: Type of notification (break, focus, etc.)
+            nudge_id: Unique identifier for this nudge
+        """
         try:
-            # Escape quotes in the message
-            escaped_message = message.replace('"', '\\"')
+            # Get the current event loop - must be called from async context
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running event loop - cannot use async fallback, just log and record
+            self.logger.warning(f"No event loop available for async notification - skipping notification")
+            self.logger.warning(f"Notification would have been: {message[:50]}...")
+            self._record_feedback(nudge_id, "no_response")
+            return
+        
+        # Create and fire off the background task - don't await it
+        task = loop.create_task(
+            self._display_notification_with_swift_async(message, notification_type, nudge_id)
+        )
+        
+        # Add error handler to catch any unhandled exceptions
+        def handle_task_done(task):
+            """Handle task completion and log any errors."""
+            try:
+                task.result()  # This will raise if task had an exception
+            except Exception as e:
+                self.logger.error(f"Unhandled exception in notification task for {nudge_id}: {e}")
+                import traceback
+                self.logger.error(f"Traceback: {traceback.format_exc()}")
+                # Record failure as no_response
+                self._record_feedback(nudge_id, "no_response")
+        
+        task.add_done_callback(handle_task_done)
+    
+    async def _display_notification_with_swift_async(self, message: str, notification_type: str, nudge_id: str):
+        """
+        Display a native macOS notification with interactive buttons using Swift binary.
+        This runs asynchronously and collects feedback in the background.
+        
+        Args:
+            message: The notification message content
+            notification_type: Type of notification (break, focus, etc.)
+            nudge_id: Unique identifier for this nudge
+        """
+        try:
+            swift_binary = self._get_swift_notifier_path()
+            
+            self.logger.info(f"🔍 Checking Swift binary at: {swift_binary}")
+            self.logger.info(f"   Binary exists: {swift_binary.exists()}")
+            
+            if not swift_binary.exists():
+                self.logger.error(f"❌ FALLBACK TRIGGERED: Swift binary not found at {swift_binary}")
+                self.logger.error("Please run: cd notifier/swift_notifier && ./build.sh")
+                # Fallback to async notification (non-blocking)
+                await self._display_notification_async(message, notification_type)
+                self._record_feedback(nudge_id, "no_response")
+                return
             
             # Customize title based on notification type
             title_map = {
@@ -685,23 +738,226 @@ class GUMNotifier:
             }
             
             title = title_map.get(notification_type, '🔔 GUM Nudge')
-            escaped_title = title.replace('"', '\\"')
+            
+            # Start the Swift process - don't wait for it here
+            process = await asyncio.create_subprocess_exec(
+                str(swift_binary), title, message,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # Launch feedback collection in background - this is where we wait
+            # Use create_task to run feedback collection without blocking
+            feedback_task = asyncio.create_task(
+                self._collect_swift_feedback(process, nudge_id, message, notification_type)
+            )
+            
+            # Add error handler for feedback collection
+            def handle_feedback_error(task):
+                try:
+                    task.result()
+                except Exception as e:
+                    self.logger.error(f"Error in feedback collection for {nudge_id}: {e}")
+                    self._record_feedback(nudge_id, "no_response")
+            
+            feedback_task.add_done_callback(handle_feedback_error)
+            
+        except FileNotFoundError:
+            self.logger.error(f"❌ FALLBACK: Swift notifier binary not found. Please build it first.")
+            # Fallback to async notification (non-blocking)
+            await self._display_notification_async(message, notification_type)
+            self._record_feedback(nudge_id, "no_response")
+        except Exception as e:
+            self.logger.error(f"❌ FALLBACK: Error starting Swift notification for {nudge_id}: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            # Fallback to async notification (non-blocking)
+            try:
+                await self._display_notification_async(message, notification_type)
+            except Exception as fallback_error:
+                self.logger.error(f"❌ Fallback notification also failed: {fallback_error}")
+            self._record_feedback(nudge_id, "no_response")
+    
+    async def _collect_swift_feedback(self, process: asyncio.subprocess.Process, nudge_id: str, 
+                                     message: str, notification_type: str):
+        """
+        Collect feedback from Swift notification process in the background.
+        
+        This coroutine waits for the Swift process to complete (user clicks button or timeout),
+        parses the response, and records the feedback.
+        
+        Args:
+            process: The subprocess process object
+            nudge_id: Unique identifier for this nudge
+            message: Notification message (for fallback)
+            notification_type: Notification type (for fallback)
+        """
+        try:
+            # Wait for process to complete with timeout
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=35.0  # 30 second timeout + buffer
+            )
+            
+            stdout_text = stdout.decode('utf-8') if stdout else ""
+            stderr_text = stderr.decode('utf-8') if stderr else ""
+            returncode = process.returncode
+            
+            # ALWAYS log what actually happened (for debugging)
+            if returncode != 0:
+                self.logger.error(f"❌ Swift notifier failed for {nudge_id}")
+                self.logger.error(f"   Return code: {returncode}")
+                self.logger.error(f"   STDOUT: '{stdout_text.strip()}'")
+                self.logger.error(f"   STDERR: '{stderr_text.strip()}'")
+                
+                # Check for permission errors
+                stderr_lower = stderr_text.lower()
+                if "permission denied" in stderr_lower or "error 1" in stderr_lower or "unauthorized" in stderr_lower or "not authorized" in stderr_lower:
+                    self.logger.error("❌ FALLBACK: Notification permissions not granted!")
+                    self.logger.error("   To grant permissions:")
+                    self.logger.error("   1. Open System Settings → Notifications & Focus")
+                    self.logger.error("   2. Find 'Terminal' or 'Python' in the app list")
+                    self.logger.error("   3. Enable 'Allow Notifications'")
+                    self.logger.error("   4. Set alert style to 'Banners' or 'Alerts'")
+                
+                # Trigger fallback
+                await self._display_notification_async(message, notification_type)
+                self._record_feedback(nudge_id, "no_response")
+                return
+            
+            # Parse successful response
+            feedback = stdout_text.strip().lower()
+            
+            # Validate and record feedback
+            if feedback in ["thanks", "not_now", "no_response"]:
+                self.logger.info(f"📊 User feedback for {nudge_id}: {feedback}")
+                self._record_feedback(nudge_id, feedback)
+            else:
+                self.logger.warning(f"Unexpected response from Swift notifier: '{feedback}'")
+                if stderr_text:
+                    self.logger.warning(f"   STDERR: '{stderr_text.strip()}'")
+                self._record_feedback(nudge_id, "no_response")
+                
+        except asyncio.TimeoutError:
+            # Kill the process and record timeout
+            try:
+                process.kill()
+                await process.wait()
+            except:
+                pass
+            self.logger.warning(f"⏱️ Notification timeout for {nudge_id}")
+            self._record_feedback(nudge_id, "no_response")
+        except Exception as e:
+            self.logger.error(f"❌ Error collecting Swift feedback for {nudge_id}: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            self._record_feedback(nudge_id, "no_response")
+    
+    def _record_feedback(self, nudge_id: str, feedback: str):
+        """
+        Record user feedback from notification buttons.
+        
+        This is a synchronous method that updates feedback storage, session stats,
+        and satisfaction multiplier. Called after feedback is collected.
+        
+        Args:
+            nudge_id: Unique identifier for this nudge
+            feedback: User feedback ("thanks", "not_now", or "no_response")
+        """
+        # Store feedback
+        self.button_feedback[nudge_id] = feedback
+        
+        # Update session statistics
+        self.session_stats[f"{feedback}_count"] = self.session_stats.get(f"{feedback}_count", 0) + 1
+        self.session_stats["total_notifications"] = self.session_stats.get("total_notifications", 0) + 1
+        
+        # Update satisfaction multiplier based on feedback
+        self._update_satisfaction_multiplier()
+        
+        self.logger.info(f"✅ Recorded feedback for {nudge_id}: {feedback} (total: {self.session_stats['total_notifications']})")
+    
+    async def test_swift_binary_diagnostics(self):
+        """Diagnostic test to see what's actually happening with Swift binary."""
+        swift_binary = self._get_swift_notifier_path()
+        
+        print(f"\n{'='*60}")
+        print(f"SWIFT BINARY DIAGNOSTICS")
+        print(f"{'='*60}")
+        print(f"Binary path: {swift_binary}")
+        print(f"Binary exists: {swift_binary.exists()}")
+        
+        if swift_binary.exists():
+            # Test 1: Direct execution from shell
+            print(f"\nTest 1: Direct shell execution...")
+            result = subprocess.run(
+                [str(swift_binary), "Test", "Direct shell test"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            print(f"  Return code: {result.returncode}")
+            print(f"  STDOUT: {result.stdout}")
+            print(f"  STDERR: {result.stderr}")
+            
+            # Test 2: Async subprocess (how it's actually used)
+            print(f"\nTest 2: Async subprocess execution...")
+            process = await asyncio.create_subprocess_exec(
+                str(swift_binary), "Test", "Async subprocess test",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+            print(f"  Return code: {process.returncode}")
+            print(f"  STDOUT: {stdout.decode()}")
+            print(f"  STDERR: {stderr.decode()}")
+            
+            print(f"{'='*60}\n")
+        else:
+            print(f"❌ Binary not found - cannot run diagnostics")
+            print(f"{'='*60}\n")
+    
+    async def _display_notification_async(self, message: str, notification_type: str):
+        """Display a native macOS notification (async fallback method without buttons)."""
+        try:
+            # Escape quotes in the message (both single and double)
+            escaped_message = message.replace('"', '\\"').replace("'", "\\'")
+            
+            # Customize title based on notification type
+            title_map = {
+                'break': '⏰ Break Reminder',
+                'focus': '🎯 Focus Nudge', 
+                'productivity': '⚡ Productivity Tip',
+                'habit': '🔄 Habit Reminder',
+                'health': '💚 Health Nudge',
+                'general': '🔔 GUM Nudge'
+            }
+            
+            title = title_map.get(notification_type, '🔔 GUM Nudge')
+            escaped_title = title.replace('"', '\\"').replace("'", "\\'")
             
             # Create the AppleScript command
             script = f'''
             display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
             '''
             
-            # Execute the notification
-            subprocess.run(['osascript', '-e', script], check=True, timeout=5)
-            self.logger.info(f"📢 Displayed notification: {title} - {message}")
+            # Use async subprocess instead of blocking subprocess.run
+            process = await asyncio.create_subprocess_exec(
+                'osascript', '-e', script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
             
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"❌ Failed to display notification: {e}")
-        except subprocess.TimeoutExpired:
-            self.logger.error("❌ Notification display timed out")
+            try:
+                await asyncio.wait_for(process.communicate(), timeout=5.0)
+                self.logger.info(f"📢 Displayed fallback notification: {title}")
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                self.logger.error("❌ Fallback notification timed out")
+                
         except Exception as e:
-            self.logger.error(f"❌ Error displaying notification: {e}")
+            self.logger.error(f"❌ Error in fallback notification: {e}")
+    
     
     def get_recent_contexts(self, limit: int = 10) -> List[NotificationContext]:
         """Get the most recent notification contexts."""
@@ -765,202 +1021,6 @@ class GUMNotifier:
         except Exception as e:
             self.logger.error(f"Error cancelling observation {nudge_id}: {e}")
             return False
-    
-    # this is the notif display with buttons, but modal pop up window
-    # def _display_notification_with_buttons(self, message: str, notification_type: str, nudge_id: str):
-    #     """Display a native macOS notification with feedback buttons."""
-    #     try:
-    #         escaped_message = message.replace('"', '\\"').replace("'", "\\'")
-            
-    #         title_map = {
-    #             'break': '⏰ Break Reminder',
-    #             'focus': '🎯 Focus Nudge', 
-    #             'productivity': '⚡ Productivity Tip',
-    #             'habit': '🔄 Habit Reminder',
-    #             'health': '💚 Health Nudge',
-    #             'general': '🔔 GUM Nudge'
-    #         }
-            
-    #         title = title_map.get(notification_type, '🔔 GUM Nudge')
-    #         escaped_title = title.replace('"', '\\"').replace("'", "\\'")
-            
-    #         # AppleScript with buttons
-    #         script = f'''
-    #         try
-    #             set theResponse to button returned of (display alert "{escaped_title}" message "{escaped_message}" buttons {{"Thanks!", "Not now!"}} default button "Thanks!" giving up after 30)
-    #             return theResponse
-    #         on error
-    #             return "no_response"
-    #         end try
-    #         '''
-            
-    #         # Execute and capture button click
-    #         def show_alert_async():
-    #             try:
-    #                 result = subprocess.run(
-    #                     ['osascript', '-e', script], 
-    #                     capture_output=True, 
-    #                     text=True, 
-    #                     timeout=35
-    #                 )
-                    
-    #                 response = result.stdout.strip()
-    #                 if "Thanks!" in response:
-    #                     feedback = "thanks"
-    #                 elif "Not now!" in response:
-    #                     feedback = "not_now"
-    #                 else:
-    #                     feedback = "no_response"
-                    
-    #                 self.button_feedback[nudge_id] = feedback
-    #                 self.session_stats[f"{feedback}_count"] += 1
-                    
-    #                 self.logger.info(f"📊 User feedback for {nudge_id}: {feedback}")
-    #                 self._update_satisfaction_multiplier()
-                    
-    #             except subprocess.TimeoutExpired:
-    #                 self.button_feedback[nudge_id] = "no_response"
-    #                 self.session_stats["no_response_count"] += 1
-    #                 self.logger.info(f"⏱️ No response for {nudge_id} (timeout)")
-    #             except Exception as e:
-    #                 self.logger.error(f"❌ Error in alert: {e}")
-    #                 self.button_feedback[nudge_id] = "no_response"
-    #                 self.session_stats["no_response_count"] += 1
-            
-    #         import threading
-    #         thread = threading.Thread(target=show_alert_async, daemon=True)
-    #         thread.start()
-            
-    #         self.logger.info(f"📢 Displayed notification: {title}")
-            
-    #     except Exception as e:
-    #         self.logger.error(f"❌ Error displaying notification: {e}")
-
-    # this uses PyObjC to display the notification with buttons as a banner!!! 
-    def _display_notification_with_buttons(self, message: str, notification_type: str, nudge_id: str):
-        """Display a native macOS notification banner with feedback buttons."""
-        try:
-            # Check if PyObjC is available
-            if not PYOBJC_AVAILABLE:
-                self.logger.warning("PyObjC not available - using simple banner notification")
-                self._display_simple_notification(message, notification_type)
-                self.button_feedback[nudge_id] = "no_response"
-                self.session_stats["no_response_count"] += 1
-                return
-            
-            try:
-                from AppKit import NSApplication
-                
-                app = NSApplication.sharedApplication()
-                if app is None:
-                    raise RuntimeError("NSApplication not available")
-                
-                # Get center ONCE and check if None
-                center = NSUserNotificationCenter.defaultUserNotificationCenter()
-                if center is None:
-                    raise RuntimeError("NSUserNotificationCenter returned None")
-                
-                self.logger.info("✅ NSUserNotificationCenter initialized successfully")
-                
-                # Set up delegate (only create once)
-                if not hasattr(self, '_notification_delegate'):
-                    if NotificationDelegate is None:
-                        raise RuntimeError("NotificationDelegate not available")
-                    self._notification_delegate = NotificationDelegate.alloc().init()
-                    self._notification_delegate.notifier = self
-                    center.setDelegate_(self._notification_delegate)
-                    self.logger.info("✅ Notification delegate set up")
-                
-                # Create notification
-                notification = NSUserNotification.alloc().init()
-                
-                # Set title and message
-                title_map = {
-                    'break': '⏰ Break Reminder',
-                    'focus': '🎯 Focus Nudge', 
-                    'productivity': '⚡ Productivity Tip',
-                    'habit': '🔄 Habit Reminder',
-                    'health': '💚 Health Nudge',
-                    'general': '🔔 GUM Nudge'
-                }
-                title = title_map.get(notification_type, '🔔 GUM Nudge')
-                
-                notification.setTitle_(title)
-                notification.setInformativeText_(message)
-                notification.setSoundName_("Glass")
-                
-                # Add action buttons
-                notification.setHasActionButton_(True)
-                notification.setActionButtonTitle_("Thanks!")
-                notification.setOtherButtonTitle_("Not now!")
-                
-                # Store nudge_id in userInfo for callback
-                notification.setUserInfo_({"nudge_id": nudge_id})
-                
-                # Deliver notification using the SAME center we initialized above
-                center.deliverNotification_(notification)
-                
-                self.logger.info(f"📢 Displayed banner notification with buttons: {title}")
-                
-                # Set default feedback after 30 seconds
-                def set_default_feedback():
-                    import time
-                    time.sleep(30)
-                    if nudge_id not in self.button_feedback:
-                        self.button_feedback[nudge_id] = "no_response"
-                        self.session_stats["no_response_count"] += 1
-                        self.logger.info(f"⏱️ No response for {nudge_id} (timeout)")
-                
-                import threading
-                thread = threading.Thread(target=set_default_feedback, daemon=True)
-                thread.start()
-                
-            except (RuntimeError, Exception) as e:
-                # If PyObjC fails for any reason, fall back
-                self.logger.warning(f"PyObjC banner failed ({e}), using fallback")
-                self._display_simple_notification(message, notification_type)
-                self.button_feedback[nudge_id] = "no_response"
-                self.session_stats["no_response_count"] += 1
-                    
-        except Exception as e:
-            self.logger.error(f"❌ Error displaying notification: {e}")
-            import traceback
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
-            
-            # Last resort fallback
-            try:
-                self._display_simple_notification(message, notification_type)
-                self.button_feedback[nudge_id] = "no_response"
-                self.session_stats["no_response_count"] += 1
-            except Exception as fallback_error:
-                self.logger.error(f"❌ Fallback notification also failed: {fallback_error}")
-
-    def _display_simple_notification(self, message: str, notification_type: str):
-        """Fallback: Display simple banner notification without buttons."""
-        try:
-            escaped_message = message.replace('"', '\\"')
-            
-            title_map = {
-                'break': '⏰ Break Reminder',
-                'focus': '🎯 Focus Nudge', 
-                'productivity': '⚡ Productivity Tip',
-                'habit': '🔄 Habit Reminder',
-                'health': '💚 Health Nudge',
-                'general': '🔔 GUM Nudge'
-            }
-            
-            title = title_map.get(notification_type, '🔔 GUM Nudge')
-            escaped_title = title.replace('"', '\\"')
-            
-            script = f'''
-            display notification "{escaped_message}" with title "{escaped_title}" sound name "Glass"
-            '''
-            
-            subprocess.run(['osascript', '-e', script], check=True, timeout=5)
-            self.logger.info(f"📢 Displayed banner notification: {title}")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Error displaying simple notification: {e}")
     
     def _update_satisfaction_multiplier(self):
         """Update cooldown/threshold multiplier based on recent satisfaction."""
