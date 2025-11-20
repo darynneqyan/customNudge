@@ -139,6 +139,9 @@ class NotificationGUI:
         
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Store canvas reference for scroll position management
+        self.decisions_canvas = canvas
     
     def setup_contexts_tab(self):
         """Setup the Observation Contexts tab."""
@@ -490,6 +493,12 @@ class NotificationGUI:
                 current_count = len(decisions)
                 previous_count = self.last_count
                 
+                # Save current scroll position before clearing
+                if hasattr(self, 'decisions_canvas'):
+                    scroll_position = self.decisions_canvas.yview()[0]  # Get current scroll position (0.0 to 1.0)
+                else:
+                    scroll_position = 0.0
+                
                 # Always refresh when refresh button is clicked or if there are new decisions
                 self.clear_all_widgets()
                 
@@ -498,6 +507,12 @@ class NotificationGUI:
                     self.add_decision(decision)
                     if decision.get('should_notify'):
                         self.sent_count += 1
+                
+                # Restore scroll position after widgets are added
+                if hasattr(self, 'decisions_canvas'):
+                    self.decisions_frame.update_idletasks()
+                    # Restore scroll position
+                    self.decisions_canvas.yview_moveto(scroll_position)
                 
                 new_decisions = current_count - previous_count
                 self.last_count = current_count
