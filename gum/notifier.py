@@ -40,6 +40,7 @@ class NotificationDecision:
     reasoning: str
     notification_message: str
     notification_type: str
+    selected_observation_id: Optional[int] = None  # For batched decisions: which observation was selected
 
 class GUMNotifier:
     """Simple notification system that uses BM25 to find similar propositions and observations."""
@@ -201,8 +202,53 @@ class GUMNotifier:
             self.logger.error(f"Error getting learning context: {e}")
             return "Unable to retrieve learning context from training data."
     
+    def _save_batch_decision(self, contexts: List[NotificationContext], decision: NotificationDecision, selected_context: Optional[NotificationContext]):
+        """Save a batch notification decision to separate file for GUI."""
+        try:
+            # Collect all observation IDs in the batch
+            observation_ids = [ctx.observation_id for ctx in contexts]
+            
+            # Use selected context for content display, or first context if none selected
+            display_context = selected_context or (contexts[0] if contexts else None)
+            
+            decision_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'observation_ids': observation_ids,  # All observations in batch
+                'observation_id': selected_context.observation_id if selected_context else None,  # Selected observation (if any)
+                'batch_size': len(contexts),
+                'should_notify': decision.should_notify,
+                'relevance_score': decision.relevance_score,
+                'goal_relevance_score': decision.goal_relevance_score,
+                'urgency_score': decision.urgency_score,
+                'impact_score': decision.impact_score,
+                'reasoning': decision.reasoning,
+                'notification_message': decision.notification_message,
+                'notification_type': decision.notification_type,
+                'observation_content': display_context.observation_content[:200] + "..." if display_context else "N/A",
+                'generated_propositions_count': len(display_context.generated_propositions) if display_context else 0,
+                'similar_propositions_count': len(display_context.similar_propositions) if display_context else 0,
+                'similar_observations_count': len(display_context.similar_observations) if display_context else 0,
+                'blocked_reason': None  # Will be set if blocked by cooldown
+            }
+            
+            # Verify reasoning is present before saving
+            if not decision.reasoning or len(decision.reasoning.strip()) == 0:
+                self.logger.error(f"Attempting to save batch decision with empty reasoning!")
+            
+            self.decisions_log.append(decision_entry)
+            
+            self.logger.info(f"Saving batch decision to {self.decisions_file}")
+            with open(self.decisions_file, 'w') as f:
+                json.dump(self.decisions_log, f, indent=2)
+                f.flush()  # Ensure file is written to OS buffer immediately
+            self.logger.info(f"Batch decision saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving batch decision: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+    
     def _save_decision(self, context: NotificationContext, decision: NotificationDecision):
-        """Save a notification decision to separate file for GUI."""
+        """Save a notification decision to separate file for GUI (legacy method for single observations)."""
         try:
             decision_entry = {
                 'timestamp': context.timestamp,
@@ -238,8 +284,26 @@ class GUMNotifier:
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
     
+    def _update_batch_decision_with_cooldown(self, contexts: List[NotificationContext], remaining: float):
+        """Update the most recent batch decision entry with cooldown information."""
+        try:
+            if self.decisions_log:
+                # Update the most recent decision entry
+                last_decision = self.decisions_log[-1]
+                last_decision['blocked_reason'] = 'COOLDOWN'
+                last_decision['cooldown_remaining'] = remaining
+                last_decision['should_notify'] = False  # Mark as not sent due to cooldown
+                
+                # Save updated decision
+                with open(self.decisions_file, 'w') as f:
+                    json.dump(self.decisions_log, f, indent=2)
+                    f.flush()  # Ensure file is written to OS buffer immediately
+                self.logger.info(f"Updated batch decision with cooldown information")
+        except Exception as e:
+            self.logger.error(f"Error updating batch decision with cooldown: {e}")
+    
     def _update_decision_with_cooldown(self, context: NotificationContext, remaining: float):
-        """Update the most recent decision entry with cooldown information."""
+        """Update the most recent decision entry with cooldown information (legacy method)."""
         try:
             if self.decisions_log:
                 # Update the most recent decision entry
@@ -405,6 +469,235 @@ class GUMNotifier:
             self.logger.error(f"Error finding similar observations: {e}")
             return []
     
+    async def _make_batched_notification_decisions(self, contexts: List[NotificationContext]) -> Optional[NotificationDecision]:
+        """
+        Make a single notification decision for a batch of observations based on overall pattern.
+        
+        This evaluates the overall pattern across all observations and makes ONE decision
+        for the entire batch, rather than evaluating each observation individually.
+        
+        Args:
+            contexts: List of NotificationContext objects to evaluate together
+            
+        Returns:
+            Single NotificationDecision for the batch (or None if error)
+        """
+        if not contexts:
+            return []
+        
+        # Format notification history (last 5)
+        recent_notifs = self.sent_notifications[-5:]
+        notif_history_text = "\n".join([
+            f"- [{n['timestamp']}] {n['message']} (type: {n['type']})"
+            for n in recent_notifs
+        ]) if recent_notifs else "No recent notifications"
+        
+        # Get learning context from training data
+        learning_context = self._get_learning_context()
+        
+        # Get user goal from gum_instance or default 
+        user_goal = getattr(self.gum_instance, 'user_goal', None)
+        if user_goal:
+            user_goal_text = f"{self.user_name} has set the following goal for this session: {user_goal}"
+        else:
+            user_goal_text = f"{self.user_name} has not set a specific goal for this session. Consider general behavioral patterns and what they likely want to improve."
+        
+        # Get cooldown status for LLM
+        in_cooldown, remaining = self._is_in_cooldown()
+        if in_cooldown:
+            cooldown_status = f"⚠️ COOLDOWN ACTIVE: A notification was sent {remaining:.0f} seconds ago. You MUST set `should_notify` to `false` for all observations and explain in your reasoning that the reason is cooldown - too soon since last notification."
+        else:
+            cooldown_status = "✅ Cooldown inactive: No notification sent in the last 2 minutes. Ready to send if observations are relevant."
+        
+        # Format all observations for the batch prompt
+        observations_text = []
+        for i, ctx in enumerate(contexts, 1):
+            gen_props_text = "\n".join([
+                f"- {p['text']} (confidence: {p['confidence']}/10)"
+                for p in ctx.generated_propositions[:3]
+            ]) if ctx.generated_propositions else "None"
+            
+            sim_props_text = "\n".join([
+                f"- {p['text']} (confidence: {p['confidence']}/10, relevance: {p['relevance_score']:.2f})"
+                for p in ctx.similar_propositions[:5]
+            ]) if ctx.similar_propositions else "None"
+            
+            sim_obs_text = "\n".join([
+                f"- {o['content'][:100]}... (relevance: {o['relevance_score']:.2f})"
+                for o in ctx.similar_observations[:5]
+            ]) if ctx.similar_observations else "None"
+            
+            observations_text.append(f"""
+## Observation {i} (ID: {ctx.observation_id})
+
+**Content:**
+{ctx.observation_content}
+
+**Generated Propositions:**
+{gen_props_text}
+
+**Similar Past Behavioral Patterns:**
+{sim_props_text}
+
+**Similar Past Observations:**
+{sim_obs_text}
+""")
+        
+        # Construct batched prompt
+        prompt = f"""You are a helpful assistant that decides whether to send behavioral nudge notifications to {self.user_name}.
+
+# User Goal
+
+{user_goal_text}
+
+If {self.user_name} has set a specific goal for this session, all notifications should help them achieve that goal. Consider how each observation relates to their goal when deciding whether to notify.
+
+Your goal is to help {self.user_name} change behaviors they want to improve by sending timely, relevant, and actionable notifications.
+
+# Observations to Evaluate
+
+{''.join(observations_text)}
+
+# Shared Context
+
+## Recent Notification History
+{notif_history_text}
+
+## Learning from Previous Actions
+{learning_context}
+
+## Cooldown Status
+{cooldown_status}
+
+**Important**: There is a 2-minute cooldown period between notifications. If a notification was sent recently (within the last 2 minutes), you should NOT send another notification, even if observations are highly relevant. In this case, set `should_notify` to `false` for all observations and explain in your reasoning that the reason is cooldown.
+
+# Decision Strategy: Evaluate Overall Pattern, Not Individual Moments
+
+**CRITICAL**: You are evaluating a BATCH of observations that occurred over a short time period. Look at the OVERALL PATTERN and TREND across all observations, not just individual moments.
+
+**Key Principles:**
+1. **Pattern Recognition**: Identify the dominant behavior pattern across all observations. What is {self.user_name} doing MOST of the time?
+2. **Goal Alignment**: If {self.user_name} has a goal, evaluate whether the OVERALL pattern aligns with that goal, not just individual observations.
+   - Example: If goal is "focus on coding" and 4 out of 5 observations show coding, the overall pattern IS aligned with the goal, even if 1 observation shows a brief distraction.
+   - Only notify if the OVERALL pattern shows deviation from the goal.
+3. **Temporal Context**: Consider that brief moments of deviation are normal. Only notify if there's a sustained pattern of misalignment.
+4. **Majority Rules**: If most observations show goal-aligned behavior, do NOT notify, even if some individual observations don't.
+5. **Only ONE Notification**: Only ONE notification can be sent from this entire batch. If you decide to notify, pick the observation that best represents the overall pattern of concern, and set `should_notify=false` for all others.
+
+# Decision Criteria
+
+For the OVERALL PATTERN across all observations, consider:
+1. **Overall Relevance** (0-10): Does the overall pattern show a behavior {self.user_name} likely wants to change?
+2. **Overall Goal Alignment** (0-10): If {self.user_name} has a specific goal, does the overall pattern align with that goal? (Consider the majority/dominant behavior, not outliers)
+3. **Sustained Pattern**: Is this a sustained pattern of concern, or just brief moments?
+4. **Actionability**: Can {self.user_name} act on this notification right now?
+5. **Novelty**: Is this different enough from recent notifications to be valuable?
+
+# Task
+
+1. **First, analyze the overall pattern** across all observations. What is the dominant behavior? Does it align with {self.user_name}'s goal?
+2. **Then, make ONE decision** for the entire batch: should we notify based on the overall pattern?
+3. **If notification is needed**, pick the ONE observation that best represents the pattern of concern (use its observation_id).
+
+Return a SINGLE decision for the entire batch in this exact JSON format:
+
+{{
+  "should_notify": true/false,
+  "relevance_score": <0-10>,
+  "goal_relevance_score": <0-10 or null>,
+  "urgency_score": <0-10>,
+  "impact_score": <0-10>,
+  "reasoning": "<brief explanation of the overall pattern analysis across all observations>",
+  "notification_message": "<succinct message if should_notify=true, otherwise empty string>",
+  "notification_type": "<one of: 'focus', 'break', 'habit', 'health', 'productivity', 'none'>",
+  "selected_observation_id": <observation_id of the observation that best represents the concern, or null if should_notify=false>
+}}
+
+**Remember**: 
+- Evaluate the OVERALL PATTERN across all observations, not individual moments
+- Make ONE decision for the entire batch
+- If the majority of observations show goal-aligned behavior, do NOT notify
+- If notification is needed, pick the observation_id that best represents the concern
+- Be conservative - only notify when there's a clear sustained pattern of misalignment
+- If cooldown is active, set should_notify=false"""
+        
+        try:
+            # Call LLM using chat_completion
+            api_call_start = datetime.now()
+            self.logger.info(f"[{api_call_start.strftime('%H:%M:%S.%f')[:-3]}] Making batched LLM API call for {len(contexts)} observations")
+            response = await self.gum_instance.provider.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "text"}
+            )
+            api_call_end = datetime.now()
+            api_call_duration = (api_call_end - api_call_start).total_seconds()
+            self.logger.info(f"[{api_call_end.strftime('%H:%M:%S.%f')[:-3]}] LLM API call completed in {api_call_duration:.2f}s")
+            
+            if not response or not response.strip():
+                self.logger.error("Empty response from LLM for batched decision")
+                return None
+            
+            # Clean up the response
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]
+                if cleaned_response.endswith('```'):
+                    cleaned_response = cleaned_response[:-3]
+                cleaned_response = cleaned_response.strip()
+            elif cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]
+                if cleaned_response.endswith('```'):
+                    cleaned_response = cleaned_response[:-3]
+                cleaned_response = cleaned_response.strip()
+            
+            # Parse JSON
+            try:
+                result = json.loads(cleaned_response)
+            except json.JSONDecodeError as e:
+                self.logger.error(f"JSON decode error in batched decision: {e}")
+                self.logger.error(f"Response: {repr(response[:500])}")
+                return None
+            
+            # Create single decision object for the batch
+            goal_relevance = result.get('goal_relevance_score')
+            goal_relevance_score = float(goal_relevance) if goal_relevance is not None else None
+            
+            reasoning = result.get('reasoning', '')
+            if not reasoning:
+                reasoning = "No reasoning provided by LLM"
+            
+            decision = NotificationDecision(
+                should_notify=result.get('should_notify', False),
+                relevance_score=float(result.get('relevance_score', 0)),
+                goal_relevance_score=goal_relevance_score,
+                urgency_score=float(result.get('urgency_score', 0)),
+                impact_score=float(result.get('impact_score', 0)),
+                reasoning=reasoning,
+                notification_message=result.get('notification_message', ''),
+                notification_type=result.get('notification_type', 'none')
+            )
+            
+            # Store selected observation_id for later use
+            selected_obs_id = result.get('selected_observation_id')
+            if selected_obs_id is not None:
+                decision.selected_observation_id = selected_obs_id
+            
+            parse_end = datetime.now()
+            goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
+            self.logger.info(
+                f"[{parse_end.strftime('%H:%M:%S.%f')[:-3]}] Batched Decision for {len(contexts)} observations: should_notify={decision.should_notify}, "
+                f"relevance={decision.relevance_score}, goal_relevance={goal_relevance}, "
+                f"selected_obs_id={selected_obs_id}"
+            )
+            
+            return decision
+                
+        except Exception as e:
+            self.logger.error(f"Error making batched notification decision: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return None
+    
     async def _make_notification_decision(self, 
                                          observation_content: str,
                                          generated_propositions: List[Dict[str, Any]],
@@ -550,33 +843,30 @@ class GUMNotifier:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
     
-    async def process_observation_batch(self, batched_observations: List[Dict[str, Any]]):
+    async def _prepare_observation_contexts(self, batched_observations: List[Dict[str, Any]]) -> List[NotificationContext]:
         """
-        Process a batch of observations and find similar propositions/observations.
+        Prepare notification contexts for all observations in parallel.
         
-        This method is called after GUM's _process_batch completes.
-        By this point, propositions are already attached to observations in the DB.
+        This gathers all the data needed for notification decisions (propositions, similar items, etc.)
+        in parallel, but doesn't make LLM calls yet.
         
         Args:
             batched_observations: List of observation dictionaries from GUM's batch
+            
+        Returns:
+            List of NotificationContext objects
         """
-        self.logger.info(f"Processing {len(batched_observations)} observations for notifications")
-        
-        # Process each observation
-        for obs_data in batched_observations:
+        async def prepare_single_context(obs_data: Dict[str, Any]) -> Optional[NotificationContext]:
             try:
-                # Extract observation data
                 observation_content = obs_data.get('content', '')
                 observation_id = obs_data.get('id')
                 
-                self.logger.info(f"Processing observation {observation_id}")
-                self.logger.debug(f"Content preview: {observation_content[:100]}...")
+                prep_start = datetime.now()
+                self.logger.info(f"[{prep_start.strftime('%H:%M:%S.%f')[:-3]}] Preparing context for observation {observation_id}")
                 
                 # Get propositions that were generated/attached to this observation
                 async with self.gum_instance._session() as session:
                     generated_propositions = await get_related_propositions(session, observation_id)
-                
-                self.logger.info(f"Found {len(generated_propositions)} propositions for observation {observation_id}")
                 
                 # Find similar propositions using the generated propositions
                 similar_propositions = await self._find_similar_propositions(generated_propositions)
@@ -606,158 +896,235 @@ class GUMNotifier:
                     similar_observations=similar_observations
                 )
                 
-                # Store context
-                self.notification_contexts.append(context)
-                
-                # Use LLM to decide whether to notify (timeout protects against slow API responses)
-                try:
-                    decision = await asyncio.wait_for(
-                        self._make_notification_decision(
-                            observation_content,
-                            generated_props_dict,
-                            similar_propositions,
-                            similar_observations
-                        ),
-                        timeout=30.0
-                    )
-                except asyncio.TimeoutError:
-                    self.logger.error(
-                        f"⚠️ LLM decision timed out for observation {observation_id}; skipping notification"
-                    )
-                    decision = None
-                
-                if decision:
-                    self.logger.info(f"LLM made a decision: should_notify={decision.should_notify}")
-                    # Save decision to file for GUI
-                    self._save_decision(context, decision)
-                    
-                    # Log decision
-                    goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
-                    self.logger.info(
-                        f"LLM Decision - Should notify: {decision.should_notify}, "
-                        f"Relevance: {decision.relevance_score}/10, "
-                        f"Goal Relevance: {goal_relevance}, "
-                        f"Urgency: {decision.urgency_score}/10, "
-                        f"Impact: {decision.impact_score}/10"
-                    )
-                    
-                    # Check if LLM mentioned cooldown in reasoning
-                    reasoning_lower = decision.reasoning.lower()
-                    is_cooldown_reason = 'cooldown' in reasoning_lower or 'too soon' in reasoning_lower or 'recently sent' in reasoning_lower
-                    
-                    # Print to console
-                    print(f"\n{'='*60}")
-                    print(f"LLM NOTIFICATION DECISION")
-                    print(f"{'='*60}")
-                    print(f"Should Notify: {'✅ YES' if decision.should_notify else '❌ NO'}")
-                    print(f"Type: {decision.notification_type}")
-                    print(f"Relevance: {decision.relevance_score}/10")
-                    goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
-                    print(f"Goal Relevance: {goal_relevance}")
-                    print(f"Urgency: {decision.urgency_score}/10")
-                    print(f"Impact: {decision.impact_score}/10")
-                    print(f"Reasoning: {decision.reasoning}")
-                    
-                    # If LLM mentioned cooldown as reason, display it prominently
-                    if is_cooldown_reason and not decision.should_notify:
-                        print(f"\n⏱️  REASON: COOLDOWN - LLM decided not to notify due to cooldown period")
-                    
-                    if decision.should_notify:
-                        # Safety check: if LLM says should_notify=True but we're in cooldown, block it
-                        in_cooldown, remaining = self._is_in_cooldown()
-                        if in_cooldown:
-                            print(f"\n⚠️  WARNING: LLM said should_notify=True but cooldown is active. Blocking notification.")
-                            print(f"Cooldown remaining: {remaining:.0f}s")
-                            print(f"{'='*60}\n")
-                            # Update saved decision with cooldown reason
-                            self._update_decision_with_cooldown(context, remaining)
-                            continue
-                        print(f"\n📢 NOTIFICATION MESSAGE:")
-                        print(f"{decision.notification_message}")
-                        print(f"{'='*60}\n")
-                        
-                        # previously:
-                        # # Display native macOS notification
-                        # self._display_notification(decision.notification_message, decision.notification_type)
-
-                        nudge_id = str(uuid.uuid4())
-                        
-                        # Update cooldown timer
-                        self.last_notification_time = datetime.now()
-                        
-                        # Track sent notification (before displaying, so it's logged even if display fails)
-                        self.sent_notifications.append({
-                            'nudge_id': nudge_id,
-                            'timestamp': context.timestamp,
-                            'message': decision.notification_message,
-                            'type': decision.notification_type,
-                            'relevance': decision.relevance_score,
-                            'goal_relevance': decision.goal_relevance_score,
-                            'urgency': decision.urgency_score,
-                            'impact': decision.impact_score
-                        })
-                        
-                        # Display notification asynchronously (non-blocking)
-                        # Start the notification task but don't wait for it - batch processing continues immediately
-                        asyncio.create_task(
-                            self._display_notification_with_swift_async(
-                                decision.notification_message,
-                                decision.notification_type,
-                                nudge_id
-                            )
-                        )
-                        self.logger.info(f"📢 Notification task started for nudge {nudge_id} (non-blocking)")
-                        
-                        # ADAPTIVE NUDGE ENGINE: Start observation window
-                        if self.adaptive_nudge_enabled:
-                            try:
-                                nudge_data = {
-                                    'user_context': {
-                                        'observation_content': context.observation_content,
-                                        'generated_propositions': context.generated_propositions,
-                                        'similar_propositions': context.similar_propositions,
-                                        'similar_observations': context.similar_observations,
-                                        'relevance_score': decision.relevance_score,
-                                        'urgency_score': decision.urgency_score,
-                                        'impact_score': decision.impact_score
-                                    },
-                                    'nudge_content': decision.notification_message,
-                                    'nudge_type': decision.notification_type,
-                                    'observation_duration': 120,  # 2 minutes
-                                    'decision_timestamp': context.timestamp,  # For matching decision entry
-                                    'decision_file': str(self.decisions_file)  # For updating decision entry
-                                }
-                                
-                                # Start observation window asynchronously
-                                nudge_id = await self.observation_manager.start_observation(nudge_data)
-                                
-                                # Add nudge_id to the most recent decision entry
-                                if self.decisions_log:
-                                    last_decision = self.decisions_log[-1]
-                                    if last_decision.get('timestamp') == context.timestamp:
-                                        last_decision['nudge_id'] = nudge_id
-                                        # Save updated decision
-                                        with open(self.decisions_file, 'w') as f:
-                                            json.dump(self.decisions_log, f, indent=2)
-                                            f.flush()  # Ensure file is written to OS buffer immediately
-                                
-                                self.logger.info(f"Started adaptive nudge observation window with nudge_id: {nudge_id}")
-                                
-                            except Exception as e:
-                                self.logger.error(f"Error starting adaptive nudge observation: {e}")
-                    else:
-                        print(f"\n❌ No notification sent")
-                        print(f"{'='*60}\n")
-                else:
-                    self.logger.warning("LLM returned no decision")
+                return context
                 
             except Exception as e:
-                self.logger.error(f"Error processing observation for notifications: {e}")
+                self.logger.error(f"Error preparing context for observation {obs_data.get('id', 'unknown')}: {e}")
                 import traceback
                 self.logger.error(f"Traceback: {traceback.format_exc()}")
+                return None
+        
+        # Prepare all contexts in parallel
+        gather_start = datetime.now()
+        self.logger.info(f"[{gather_start.strftime('%H:%M:%S.%f')[:-3]}] Starting parallel context preparation for {len(batched_observations)} observations")
+        contexts = await asyncio.gather(
+            *[prepare_single_context(obs_data) for obs_data in batched_observations],
+            return_exceptions=True
+        )
+        gather_end = datetime.now()
+        gather_duration = (gather_end - gather_start).total_seconds()
+        
+        # Filter out None and exceptions
+        valid_contexts = []
+        for ctx in contexts:
+            if isinstance(ctx, Exception):
+                self.logger.error(f"Exception preparing context: {ctx}")
+                continue
+            if ctx is not None:
+                valid_contexts.append(ctx)
+        
+        self.logger.info(f"[{gather_end.strftime('%H:%M:%S.%f')[:-3]}] Parallel context preparation completed in {gather_duration:.2f}s ({len(valid_contexts)}/{len(batched_observations)} successful)")
+        return valid_contexts
+    
+    async def process_observation_batch(self, batched_observations: List[Dict[str, Any]]):
+        """
+        Process a batch of observations and find similar propositions/observations.
+        
+        This method is called after GUM's _process_batch completes.
+        By this point, propositions are already attached to observations in the DB.
+        
+        Uses batched LLM calls for efficient notification decisions.
+        
+        Args:
+            batched_observations: List of observation dictionaries from GUM's batch
+        """
+        batch_start_time = datetime.now()
+        self.logger.info(f"[{batch_start_time.strftime('%H:%M:%S.%f')[:-3]}] Processing {len(batched_observations)} observations for notifications (batched)")
+        
+        # Prepare all contexts in parallel (DB queries, BM25 searches)
+        contexts = await self._prepare_observation_contexts(batched_observations)
+        
+        if not contexts:
+            self.logger.warning("No valid contexts prepared, skipping notification decisions")
+            return
+        
+        # Make batched notification decision (single LLM call for all observations)
+        llm_start_time = datetime.now()
+        self.logger.info(f"[{llm_start_time.strftime('%H:%M:%S.%f')[:-3]}] Starting batched LLM decision call for {len(contexts)} observations")
+        llm_duration = 0.0
+        try:
+            batch_decision = await asyncio.wait_for(
+                self._make_batched_notification_decisions(contexts),
+                timeout=45.0  # Slightly longer timeout for batched call
+            )
+            llm_end_time = datetime.now()
+            llm_duration = (llm_end_time - llm_start_time).total_seconds()
+            self.logger.info(f"[{llm_end_time.strftime('%H:%M:%S.%f')[:-3]}] Batched LLM decision completed in {llm_duration:.2f}s")
+        except asyncio.TimeoutError:
+            llm_end_time = datetime.now()
+            llm_duration = (llm_end_time - llm_start_time).total_seconds()
+            self.logger.error(f"[{llm_end_time.strftime('%H:%M:%S.%f')[:-3]}] ⚠️ Batched LLM decision timed out after {llm_duration:.2f}s; skipping notifications")
+            batch_decision = None
+        
+        if batch_decision is None:
+            self.logger.warning("No batch decision received, skipping notification processing")
+            # Still save contexts for tracking
+            for context in contexts:
+                self.notification_contexts.append(context)
+            return
+        
+        # Store all contexts
+        for context in contexts:
+            self.notification_contexts.append(context)
+        
+        # Process the single batch decision
+        process_start_time = datetime.now()
+        self.logger.info(f"[{process_start_time.strftime('%H:%M:%S.%f')[:-3]}] Processing batch decision for {len(contexts)} observations")
+        
+        decision_time = datetime.now()
+        self.logger.info(f"[{decision_time.strftime('%H:%M:%S.%f')[:-3]}] Batch decision: should_notify={batch_decision.should_notify}")
+        
+        # Find the selected context if a specific observation was selected
+        selected_context = None
+        if batch_decision.selected_observation_id is not None:
+            for ctx in contexts:
+                if ctx.observation_id == batch_decision.selected_observation_id:
+                    selected_context = ctx
+                    break
+        
+        # If no specific observation selected but should_notify=true, use first context
+        if batch_decision.should_notify and selected_context is None:
+            selected_context = contexts[0] if contexts else None
+            self.logger.warning(f"No selected_observation_id provided, using first observation {selected_context.observation_id if selected_context else 'N/A'}")
+        
+        # Save batch decision to file for GUI (with all observation IDs)
+        self._save_batch_decision(contexts, batch_decision, selected_context)
+            
+        # Log decision
+        goal_relevance = f"{batch_decision.goal_relevance_score}/10" if batch_decision.goal_relevance_score is not None else "N/A (no goal)"
+        self.logger.info(
+            f"Batch Decision - Should notify: {batch_decision.should_notify}, "
+            f"Relevance: {batch_decision.relevance_score}/10, "
+            f"Goal Relevance: {goal_relevance}, "
+            f"Urgency: {batch_decision.urgency_score}/10, "
+            f"Impact: {batch_decision.impact_score}/10, "
+            f"Based on {len(contexts)} observations"
+        )
+        
+        # Check if LLM mentioned cooldown in reasoning
+        reasoning_lower = batch_decision.reasoning.lower()
+        is_cooldown_reason = 'cooldown' in reasoning_lower or 'too soon' in reasoning_lower or 'recently sent' in reasoning_lower
+        
+        # Print to console
+        print(f"\n{'='*60}")
+        print(f"BATCH NOTIFICATION DECISION (based on {len(contexts)} observations)")
+        print(f"{'='*60}")
+        print(f"Should Notify: {'✅ YES' if batch_decision.should_notify else '❌ NO'}")
+        print(f"Type: {batch_decision.notification_type}")
+        print(f"Relevance: {batch_decision.relevance_score}/10")
+        goal_relevance = f"{batch_decision.goal_relevance_score}/10" if batch_decision.goal_relevance_score is not None else "N/A (no goal)"
+        print(f"Goal Relevance: {goal_relevance}")
+        print(f"Urgency: {batch_decision.urgency_score}/10")
+        print(f"Impact: {batch_decision.impact_score}/10")
+        print(f"Reasoning: {batch_decision.reasoning}")
+        if selected_context:
+            print(f"Selected Observation ID: {selected_context.observation_id}")
+        
+        # If LLM mentioned cooldown as reason, display it prominently
+        if is_cooldown_reason and not batch_decision.should_notify:
+            print(f"\n⏱️  REASON: COOLDOWN - LLM decided not to notify due to cooldown period")
+        
+        if batch_decision.should_notify:
+            if not selected_context:
+                self.logger.error("should_notify=True but no selected context available!")
+                return
+            
+            # Safety check: if LLM says should_notify=True but we're in cooldown, block it
+            in_cooldown, remaining = self._is_in_cooldown()
+            if in_cooldown:
+                print(f"\n⚠️  WARNING: LLM said should_notify=True but cooldown is active. Blocking notification.")
+                print(f"Cooldown remaining: {remaining:.0f}s")
+                print(f"{'='*60}\n")
+                # Update saved decision with cooldown reason
+                self._update_batch_decision_with_cooldown(contexts, remaining)
+                return
+            
+            print(f"\n📢 NOTIFICATION MESSAGE:")
+            print(f"{batch_decision.notification_message}")
+            print(f"{'='*60}\n")
+            
+            nudge_id = str(uuid.uuid4())
+            
+            # Update cooldown timer
+            self.last_notification_time = datetime.now()
+            
+            # Track sent notification (before displaying, so it's logged even if display fails)
+            self.sent_notifications.append({
+                'nudge_id': nudge_id,
+                'timestamp': selected_context.timestamp,
+                'message': batch_decision.notification_message,
+                'type': batch_decision.notification_type,
+                'relevance': batch_decision.relevance_score,
+                'goal_relevance': batch_decision.goal_relevance_score,
+                'urgency': batch_decision.urgency_score,
+                'impact': batch_decision.impact_score
+            })
+            
+            # Display notification asynchronously (non-blocking)
+            asyncio.create_task(
+                self._display_notification_with_swift_async(
+                    batch_decision.notification_message,
+                    batch_decision.notification_type,
+                    nudge_id
+                )
+            )
+            self.logger.info(f"📢 Notification task started for nudge {nudge_id} (non-blocking)")
+            
+            # ADAPTIVE NUDGE ENGINE: Start observation window
+            if self.adaptive_nudge_enabled:
+                try:
+                    nudge_data = {
+                        'user_context': {
+                            'observation_content': selected_context.observation_content,
+                            'generated_propositions': selected_context.generated_propositions,
+                            'similar_propositions': selected_context.similar_propositions,
+                            'similar_observations': selected_context.similar_observations,
+                            'relevance_score': batch_decision.relevance_score,
+                            'urgency_score': batch_decision.urgency_score,
+                            'impact_score': batch_decision.impact_score
+                        },
+                        'nudge_content': batch_decision.notification_message,
+                        'nudge_type': batch_decision.notification_type,
+                        'observation_duration': 120,  # 2 minutes
+                        'decision_timestamp': datetime.now().isoformat(),  # For matching decision entry
+                        'decision_file': str(self.decisions_file)  # For updating decision entry
+                    }
+                    
+                    # Start observation window asynchronously
+                    nudge_id = await self.observation_manager.start_observation(nudge_data)
+                    
+                    # Add nudge_id to the most recent decision entry
+                    if self.decisions_log:
+                        last_decision = self.decisions_log[-1]
+                        last_decision['nudge_id'] = nudge_id
+                        # Save updated decision
+                        with open(self.decisions_file, 'w') as f:
+                            json.dump(self.decisions_log, f, indent=2)
+                            f.flush()  # Ensure file is written to OS buffer immediately
+                    
+                    self.logger.info(f"Started adaptive nudge observation window with nudge_id: {nudge_id}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Error starting adaptive nudge observation: {e}")
+        else:
+            print(f"\n❌ No notification sent (overall pattern shows goal alignment)")
+            print(f"{'='*60}\n")
         
         # Save all contexts to file
+        batch_end_time = datetime.now()
+        total_duration = (batch_end_time - batch_start_time).total_seconds()
         self._save_notification_log()
+        self.logger.info(f"[{batch_end_time.strftime('%H:%M:%S.%f')[:-3]}] Batch processing completed in {total_duration:.2f}s total (LLM: {llm_duration:.2f}s)")
         self.logger.info(f"Saved notification contexts to {self.contexts_file}")
     
     def _get_swift_notifier_path(self) -> Path:
