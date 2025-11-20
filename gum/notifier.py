@@ -18,7 +18,6 @@ from .db_utils import search_propositions_bm25, search_observations_bm25, get_re
 from .models import Observation, Proposition
 from .prompts.gum import NOTIFICATION_DECISION_PROMPT
 from .adaptive_nudge import ObservationWindowManager
-import re
 
 @dataclass
 class NotificationContext:
@@ -61,8 +60,16 @@ class GUMNotifier:
         self.notification_contexts: List[NotificationContext] = []
         self.sent_notifications: List[Dict[str, Any]] = []
         self.decisions_log: List[Dict[str, Any]] = []
-        self.contexts_file = Path(f"notification_contexts_{user_name.lower().replace(' ', '_')}.json")
-        self.decisions_file = Path(f"notification_decisions_{user_name.lower().replace(' ', '_')}.json")
+        
+        # Get project root directory (where this file is located: gum/notifier.py -> gum -> project_root)
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parent.parent  # gum/notifier.py -> gum -> project_root
+        
+        # Use absolute paths to ensure files are always in project root, regardless of working directory
+        self.contexts_file = project_root / f"notification_contexts_{user_name.lower().replace(' ', '_')}.json"
+        self.decisions_file = project_root / f"notification_decisions_{user_name.lower().replace(' ', '_')}.json"
+        
+        self.logger.info(f"Notifier file paths - contexts: {self.contexts_file}, decisions: {self.decisions_file}")
         
         # Initialize Adaptive Nudge Engine
         self.observation_manager = ObservationWindowManager(user_name, gum_instance=self.gum_instance, notifier=self)
@@ -70,6 +77,8 @@ class GUMNotifier:
         
         # Load existing contexts if available
         self._load_notification_log()
+        # Load existing decisions if available
+        self._load_decisions_log()
 
         # Cooldown configuration
         self.last_notification_time = None
@@ -102,6 +111,22 @@ class GUMNotifier:
                 self.notification_contexts = []
         else:
             self.logger.info("Notification contexts file not found - system will create new contexts as observations are processed")
+    
+    def _load_decisions_log(self):
+        """Load notification decisions from file."""
+        if self.decisions_file.exists():
+            try:
+                with open(self.decisions_file, 'r') as f:
+                    self.decisions_log = json.load(f)
+                if len(self.decisions_log) > 0:
+                    self.logger.info(f"Loaded {len(self.decisions_log)} existing notification decisions")
+                else:
+                    self.logger.info("No existing notification decisions found - system will create new decisions as observations are processed")
+            except Exception as e:
+                self.logger.error(f"Error loading decisions log: {e}")
+                self.decisions_log = []
+        else:
+            self.logger.info("Notification decisions file not found - system will create new decisions as observations are processed")
     
     def _save_notification_log(self):
         """Save notification contexts to file."""
@@ -197,11 +222,16 @@ class GUMNotifier:
                 'blocked_reason': None  # Will be set if blocked by cooldown
             }
             
+            # Verify reasoning is present before saving
+            if not decision.reasoning or len(decision.reasoning.strip()) == 0:
+                self.logger.error(f"Attempting to save decision with empty reasoning! Observation ID: {context.observation_id}")
+            
             self.decisions_log.append(decision_entry)
             
             self.logger.info(f"Saving decision to {self.decisions_file}")
             with open(self.decisions_file, 'w') as f:
                 json.dump(self.decisions_log, f, indent=2)
+                f.flush()  # Ensure file is written to OS buffer immediately
             self.logger.info(f"Decision saved successfully")
         except Exception as e:
             self.logger.error(f"Error saving decision: {e}")
@@ -222,6 +252,7 @@ class GUMNotifier:
                     # Save updated decision
                     with open(self.decisions_file, 'w') as f:
                         json.dump(self.decisions_log, f, indent=2)
+                        f.flush()  # Ensure file is written to OS buffer immediately
                     self.logger.info(f"Updated decision with cooldown information")
         except Exception as e:
             self.logger.error(f"Error updating decision with cooldown: {e}")
@@ -251,6 +282,7 @@ class GUMNotifier:
                     # Save updated decision
                     with open(self.decisions_file, 'w') as f:
                         json.dump(self.decisions_log, f, indent=2)
+                        f.flush()  # Ensure file is written to OS buffer immediately
                     self.logger.info(f"Updated decision {nudge_id} with effectiveness data")
                     return
             
@@ -487,13 +519,18 @@ class GUMNotifier:
             goal_relevance = result.get('goal_relevance_score')
             goal_relevance_score = float(goal_relevance) if goal_relevance is not None else None
             
+            reasoning = result.get('reasoning', '')
+            if not reasoning:
+                self.logger.warning("LLM response has no 'reasoning' field! Response keys: " + str(list(result.keys())))
+                reasoning = "No reasoning provided by LLM"
+            
             decision = NotificationDecision(
                 should_notify=result.get('should_notify', False),
                 relevance_score=float(result.get('relevance_score', 0)),
                 goal_relevance_score=goal_relevance_score,
                 urgency_score=float(result.get('urgency_score', 0)),
                 impact_score=float(result.get('impact_score', 0)),
-                reasoning=result.get('reasoning', ''),
+                reasoning=reasoning,
                 notification_message=result.get('notification_message', ''),
                 notification_type=result.get('notification_type', 'none')
             )
@@ -702,6 +739,7 @@ class GUMNotifier:
                                         # Save updated decision
                                         with open(self.decisions_file, 'w') as f:
                                             json.dump(self.decisions_log, f, indent=2)
+                                            f.flush()  # Ensure file is written to OS buffer immediately
                                 
                                 self.logger.info(f"Started adaptive nudge observation window with nudge_id: {nudge_id}")
                                 
