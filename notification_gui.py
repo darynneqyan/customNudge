@@ -232,6 +232,58 @@ class NotificationGUI:
             pady=3
         ).pack(fill=tk.X, pady=(5, 0))
         
+        # Effectiveness evaluation (if available)
+        effectiveness_score = decision_data.get('effectiveness_score')
+        if effectiveness_score is not None:
+            # Determine color based on effectiveness
+            if effectiveness_score == 1.0:
+                eff_color = "#27ae60"  # Green for effective
+                eff_emoji = "✅"
+            elif effectiveness_score == 0.5:
+                eff_color = "#f39c12"  # Orange for partially effective
+                eff_emoji = "⚠️"
+            else:
+                eff_color = "#e74c3c"  # Red for ineffective
+                eff_emoji = "❌"
+            
+            compliance_percentage = decision_data.get('compliance_percentage', 0)
+            compliance_pattern = decision_data.get('compliance_pattern', 'Unknown')
+            evaluation_source = decision_data.get('evaluation_source', 'unknown')
+            
+            eff_frame = tk.Frame(frame, bg=eff_color, padx=10, pady=5)
+            eff_frame.pack(fill=tk.X, pady=(5, 0))
+            
+            eff_text = f"{eff_emoji} Effectiveness: {effectiveness_score}/1.0"
+            # Always show compliance information if available
+            if compliance_percentage is not None:
+                eff_text += f" | Compliance: {compliance_percentage:.1f}% ({compliance_pattern})"
+            if evaluation_source:
+                source_text = "System Capture" if evaluation_source == 'system_capture' else "Observations"
+                eff_text += f" | Source: {source_text}"
+            
+            tk.Label(
+                eff_frame,
+                text=eff_text,
+                font=("Arial", 10, "bold"),
+                bg=eff_color,
+                fg="white",
+                wraplength=850,
+                justify="left"
+            ).pack(anchor="w")
+            
+            # Effectiveness reasoning
+            eff_reasoning = decision_data.get('effectiveness_reasoning', '')
+            if eff_reasoning:
+                tk.Label(
+                    frame,
+                    text=f"💡 Effectiveness Reasoning: {eff_reasoning}",
+                    font=("Arial", 9),
+                    bg="white",
+                    wraplength=850,
+                    justify="left",
+                    fg="#34495e"
+                ).pack(anchor="w", pady=(5, 0))
+        
         # Notification message (if sent)
         if should_notify:
             message = decision_data.get('notification_message', '')
@@ -426,6 +478,9 @@ class NotificationGUI:
         - Updates status display with error messages
         - Continues operation even if individual files fail
         """
+        # Capture refresh time at the start of refresh
+        refresh_time = datetime.now()
+        
         # Check for new decisions
         if self.decisions_file.exists():
             try:
@@ -448,20 +503,21 @@ class NotificationGUI:
                 self.last_count = current_count
                 self.count_label.config(text=f"Decisions: {current_count} | Sent: {self.sent_count}")
                 
-                # Status messaging for 3 cases
+                # Status messaging for 3 cases - use refresh_time instead of datetime.now()
+                refresh_time_str = refresh_time.strftime('%I:%M:%S %p')
                 if new_decisions > 0:
                     self.status_label.config(
-                        text=f"✅ {new_decisions} new decision(s) | Last updated: {datetime.now().strftime('%I:%M:%S %p')}",
+                        text=f"✅ {new_decisions} new decision(s) | Last updated: {refresh_time_str}",
                         fg="#27ae60"
                     )
                 elif new_decisions == 0 and current_count > 0:
                     self.status_label.config(
-                        text=f"✅ Refreshed | {current_count} total decision(s) | Last updated: {datetime.now().strftime('%I:%M:%S %p')}",
+                        text=f"✅ Refreshed | {current_count} total decision(s) | Last updated: {refresh_time_str}",
                         fg="#27ae60"
                     )
                 else:
                     self.status_label.config(
-                        text=f"✅ No decisions yet | Last updated: {datetime.now().strftime('%I:%M:%S %p')}",
+                        text=f"✅ No decisions yet | Last updated: {refresh_time_str}",
                         fg="#7f8c8d"
                     )
             except Exception as e:

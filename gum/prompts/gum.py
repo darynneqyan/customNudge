@@ -216,6 +216,11 @@ Your goal is to help {user_name} change behaviors they want to improve by sendin
 ## Learning from Previous Actions
 {learning_context}
 
+## Cooldown Status
+{cooldown_status}
+
+**Important**: There is a 2-minute cooldown period between notifications. If a notification was sent recently (within the last 2 minutes), you should NOT send another notification, even if the observation is highly relevant. In this case, set `should_notify` to `false` and explain in your reasoning that the reason is cooldown - too soon since last notification.
+
 # Decision Criteria
 
 Consider these factors when deciding whether to notify:
@@ -255,6 +260,7 @@ Consider these factors when deciding whether to notify:
 - Previous similar notifications were effective OR you're trying a new approach
 
 **DON'T notify when:**
+- **COOLDOWN ACTIVE**: A notification was sent within the last 2 minutes - you MUST set `should_notify` to `false` and explain in reasoning that the reason is cooldown
 - **If goal is set**: Goal Relevance is low (0-3) - observation is not relevant to user's goal
 - **If no goal**: Relevance is low (0-3) - observation is not relevant to behaviors user likely wants to change
 - Recent (~ past 3) notifications already addressed this, and previous notifications are in the same category

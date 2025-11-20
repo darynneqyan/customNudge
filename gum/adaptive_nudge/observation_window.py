@@ -11,9 +11,10 @@ GUM system while monitoring user behavior after nudges.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Callable
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Any, Optional, Callable, List
 from dataclasses import dataclass
+from sqlalchemy import select
 
 from .state_capture import SystemStateCapture
 from .llm_judge import LLMJudge
@@ -42,14 +43,18 @@ class ObservationWindowManager:
     after nudge delivery, coordinating state capture and LLM evaluation.
     """
     
-    def __init__(self, user_name: str):
+    def __init__(self, user_name: str, gum_instance=None, notifier=None):
         """
         Initialize the observation window manager.
         
         Args:
             user_name: Name of the user being monitored
+            gum_instance: Reference to GUM instance for database access
+            notifier: Optional reference to notifier for updating decision entries
         """
         self.user_name = user_name
+        self.gum_instance = gum_instance
+        self.notifier = notifier
         self.logger = logging.getLogger("gum.adaptive_nudge.observation_window")
         
         # Initialize components
@@ -112,8 +117,9 @@ class ObservationWindowManager:
         """
         Complete observation after the specified delay.
         
-        This method waits for the observation duration, then captures
-        system state, gets LLM judgment, and logs training data.
+        This method waits for the observation duration, capturing system state
+        snapshots at regular intervals and querying observations from the database.
+        Then it gets LLM judgment and logs training data.
         
         Args:
             nudge_id: ID of the observation to complete
@@ -127,18 +133,46 @@ class ObservationWindowManager:
             
             self.logger.info(f"Waiting {observation.observation_duration}s for observation {nudge_id}")
             
-            # Wait for the observation duration
-            await asyncio.sleep(observation.observation_duration)
+            # Capture system state snapshots at regular intervals (every 30 seconds)
+            snapshot_interval = 30  
+            num_snapshots = observation.observation_duration // snapshot_interval
+            post_nudge_system_state_snapshots = []
+            start_time = observation.timestamp
+
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
             
-            # Capture post-nudge system state
-            self.logger.info(f"Capturing post-nudge system state for {nudge_id}")
-            post_nudge_screenshot = self.state_capture.capture_system_state()
+            for i in range(num_snapshots + 1):  
+                if i > 0:
+                    await asyncio.sleep(snapshot_interval)
+                
+                snapshot_time = start_time + timedelta(seconds=i * snapshot_interval)
+                self.logger.debug(f"Capturing system state snapshot {i+1}/{num_snapshots+1} at {snapshot_time} for nudge {nudge_id}")
+                snapshot = self.state_capture.capture_system_state()
+                snapshot['snapshot_timestamp'] = snapshot_time.isoformat()
+                post_nudge_system_state_snapshots.append(snapshot)
             
-            # Get LLM judgment on effectiveness
+            # Query observations from database during the 2 min window
+            observations = []
+            if self.gum_instance:
+                try:
+                    end_time = start_time + timedelta(seconds=observation.observation_duration)
+                    if end_time.tzinfo is None:
+                        end_time = end_time.replace(tzinfo=timezone.utc)
+                    observations = await self._query_observations_during_window(
+                        start_time=start_time,
+                        end_time=end_time
+                    )
+                    self.logger.info(f"Found {len(observations)} observations during window")
+                except Exception as e:
+                    self.logger.warning(f"Could not query observations: {e}")
+            
+            # LLM judge on effectiveness
             self.logger.info(f"Getting LLM judgment for {nudge_id}")
             judge_score = await self.llm_judge.get_judge_score(
                 nudge=observation.nudge_content,
-                screenshot=post_nudge_screenshot
+                observations=observations,
+                post_nudge_system_state_snapshots=post_nudge_system_state_snapshots
             )
             
             # Prepare training data entry
@@ -147,7 +181,8 @@ class ObservationWindowManager:
                 "timestamp": observation.timestamp.isoformat(),
                 "user_context": observation.user_context,
                 "nudge_content": observation.nudge_content,
-                "post_nudge_screenshot": post_nudge_screenshot,
+                "observations": observations,
+                "post_nudge_system_state_snapshots": post_nudge_system_state_snapshots,
                 "judge_score": judge_score["score"],
                 "judge_reasoning": judge_score["reasoning"],
                 "observation_duration": observation.observation_duration
@@ -155,6 +190,13 @@ class ObservationWindowManager:
             
             # Log training data
             await self.training_logger.log_training_data(training_entry)
+            
+            # Update decision entry with effectiveness data if notifier is available
+            if self.notifier:
+                try:
+                    self.notifier.update_decision_with_effectiveness(nudge_id, judge_score)
+                except Exception as e:
+                    self.logger.warning(f"Could not update decision entry: {e}")
             
             # Clean up active observation and task
             del self.active_observations[nudge_id]
@@ -170,6 +212,51 @@ class ObservationWindowManager:
                 del self.active_observations[nudge_id]
             if nudge_id in self._observation_tasks:
                 del self._observation_tasks[nudge_id]
+    
+    async def _query_observations_during_window(self, start_time: datetime, end_time: datetime) -> List[Dict[str, Any]]:
+        """
+        Query observations from database during the observation window.
+        
+        Args:
+            start_time: Start of observation window
+            end_time: End of observation window
+            
+        Returns:
+            List of observation dictionaries with content and timestamp
+        """
+        if not self.gum_instance:
+            return []
+        
+        try:
+            from ..models import Observation
+            
+            async with self.gum_instance._session() as session:
+                # Query observations created during the window
+                stmt = select(Observation).where(
+                    Observation.created_at >= start_time,
+                    Observation.created_at <= end_time
+                ).order_by(Observation.created_at)
+                
+                result = await session.execute(stmt)
+                observations = result.scalars().all()
+                
+                # Convert to dictionaries
+                obs_list = []
+                for obs in observations:
+                    obs_list.append({
+                        "id": obs.id,
+                        "content": obs.content,
+                        "content_type": obs.content_type,
+                        "observer_name": obs.observer_name,
+                        "created_at": obs.created_at.isoformat() if hasattr(obs.created_at, 'isoformat') else str(obs.created_at),
+                        "timestamp": obs.created_at.isoformat() if hasattr(obs.created_at, 'isoformat') else str(obs.created_at)
+                    })
+                
+                return obs_list
+                
+        except Exception as e:
+            self.logger.error(f"Error querying observations: {e}")
+            return []
     
     def get_active_observations(self) -> Dict[str, NudgeObservation]:
         """
