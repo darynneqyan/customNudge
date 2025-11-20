@@ -1,4 +1,4 @@
-# Setup Instructions for CustomNudge Adaptive Nudge Engine
+# CustomNudge: Setup Instructions
 
 ## Prerequisites
 - Python 3.11+ installed
@@ -47,8 +47,8 @@ The GUM Notifier app needs permission to display notifications:
    - Navigate to **Notifications & Focus** (or **Notifications** on older macOS)
    - Find **"GUM Notifier"** in the list of apps
    - Enable **"Allow Notifications"**
-   - Set **Alert Style** to **"Banners"** or **"Alerts"** (both work)
-   - Optionally enable **"Show in Notification Center"** and **"Play sound for notifications"**
+   - Set **Alert Style** to **"Alerts"** 
+   - Enable **"Show in Notification Center"** and **"Play sound for notifications"**
 
 3. **Verify permissions:**
    ```bash
@@ -71,21 +71,23 @@ For full functionality including window title capture:
 
 ### 5. Set API Key
 ```bash
-export GOOGLE_API_KEY=""
+export GOOGLE_API_KEY="INSERT API KEY HERE"
 ```
 
 **Note:** You must set this environment variable in the same shell session where you run the GUM system, or include it directly in the command (see step 6).
 
 ### 6. Start GUM System
 ```bash
-export GOOGLE_API_KEY="" && python -m gum.cli -u "Eyrin" --enable-notifications --model "gemini-2.5-flash"
+export GOOGLE_API_KEY="" && python -m gum.cli -u "NAME" --enable-notifications --model "gemini-2.5-flash"
 ```
 
 **Model Selection:** The system uses `gemini-2.5-flash` for all LLM operations (proposition generation, nudge decisions, and effectiveness evaluation).
 
-### 7. Start Notification GUI
+## For Developers
+
+### 7. Start Notification GUI in a Separate Terminal
 ```bash
-python notification_gui.py Eyrin
+python notification_gui.py NAME
 ```
 
 This opens a GUI window that displays notification decisions in real-time.
@@ -95,7 +97,7 @@ This opens a GUI window that displays notification decisions in real-time.
 ### Batch Size Configuration
 You can adjust batch processing parameters:
 ```bash
-python -m gum.cli -u "Eyrin" --enable-notifications --model "gemini-2.5-flash" --min-batch-size 3 --max-batch-size 10
+python -m gum.cli -u "NAME" --enable-notifications --model "gemini-2.5-flash" --min-batch-size 3 --max-batch-size 10
 ```
 
 - `--min-batch-size`: Minimum observations before processing (default: 5)
@@ -121,15 +123,6 @@ execution error: System Events got an error: Can't get frontmost of window. (-17
 This is handled gracefully—the system will continue without window titles. To enable full functionality:
 1. Go to **System Settings** → **Privacy & Security** → **Accessibility**
 2. Grant permissions to **Terminal** and **Python Launcher**
-
-## Current Known Issue
-
-**Batch Processing Loop Not Running:** The system collects observations in the queue (you can verify this by checking queue size in logs), but the batch processing loop that triggers proposition generation and nudge decisions is not executing reliably. This prevents the system from:
-- Generating propositions from observations
-- Making nudge decisions
-- Triggering the adaptive nudge feedback loop
-
-**Workaround:** The queue accumulates observations correctly, but manual intervention may be needed to trigger batch processing. We are actively debugging this issue.
 
 ## Verification
 
@@ -158,7 +151,7 @@ cat notification_contexts_eyrin.json
 cat notification_decisions_eyrin.json
 ```
 
-## Troubleshooting
+<!-- ## Troubleshooting
 
 ### API Key Not Working
 - Ensure `GOOGLE_API_KEY` is set in the same shell session
@@ -203,6 +196,6 @@ If you see errors like `"Notifications denied"` or `"Authorization error"`:
 - **Notification Decisions:** `notification_decisions_eyrin.json`
 - **Database:** `~/.cache/gum/gum.db`
 - **Logs:** `~/.cache/gum/logs/gum.log`
-- **Queue:** `~/.cache/gum/batches/queue/`
+- **Queue:** `~/.cache/gum/batches/queue/` -->
 
 
