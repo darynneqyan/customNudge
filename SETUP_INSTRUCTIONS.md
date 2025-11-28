@@ -49,6 +49,7 @@ The GUM Notifier app needs permission to display notifications:
    - Enable **"Allow Notifications"**
    - Set **Alert Style** to **"Alerts"** 
    - Enable **"Show in Notification Center"** and **"Play sound for notifications"**
+   - Turn off Focus Mode (e.g. Do Not Disturb) or add "GUM Notifier" to Allowed Apps for Notifications so that the Notifications can come through.
 
 3. **Verify permissions:**
    ```bash
@@ -58,6 +59,7 @@ The GUM Notifier app needs permission to display notifications:
    ```
    If you see a notification with "Thanks!" and "Not now" buttons, permissions are correctly configured.
 
+
 #### B. Accessibility Permissions (Optional but Recommended)
 
 For full functionality including window title capture:
@@ -66,6 +68,7 @@ For full functionality including window title capture:
 2. Enable permissions for:
    - **Terminal** (or your terminal app)
    - **Python Launcher** (or the Python interpreter you're using)
+3. Open **System Settings** → **Privacy & Security** → **Screen Recording** → enable the system you're running customNudge command line from.
 
 **Note:** The system will work without Accessibility permissions, but window titles won't be captured.
 

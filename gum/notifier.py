@@ -5,7 +5,7 @@ Integrates with GUM's batching pipeline and uses BM25 for similarity search.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import json
@@ -577,10 +577,11 @@ Your goal is to help {self.user_name} change behaviors they want to improve by s
 
 **Key Principles:**
 1. **Pattern Recognition**: Identify the dominant behavior pattern across all observations. What is {self.user_name} doing MOST of the time?
-2. **Goal Alignment**: If {self.user_name} has a goal, evaluate whether the OVERALL pattern aligns with that goal, not just individual observations.
-   - Example: If goal is "focus on coding" and 4 out of 5 observations show coding, the overall pattern IS aligned with the goal, even if 1 observation shows a brief distraction.
-   - Only notify if the OVERALL pattern shows deviation from the goal.
-3. **Temporal Context**: Consider that brief moments of deviation are normal. Only notify if there's a sustained pattern of misalignment.
+2. **Goal Alignment**: Determine alignment based on the semantic intent of the active window/content, not on specific app names.
+   - Treat an activity as goal-aligned when titles, URLs, open files, or visible content clearly relate to the stated goal (e.g., editing source code, running programs, reading documentation/tutorials, using development tooling, writing research notes). Switching among multiple windows that each satisfy this condition is still aligned—context switching within the goal area is normal.
+   - Treat an activity as not aligned only when the active window clearly indicates unrelated content (social media, entertainment, messaging, prolonged system configuration, shopping, etc.) **and** this behavior dominates the observation batch. Brief visits outside the goal context do not justify a nudge unless they become the majority pattern.
+   - When rapid switching occurs, base the decision on the semantic intent of each window. If switches remain within the goal context, interpret them as continuous focused work. Only treat the pattern as misaligned when the majority of switches are between goal-related and clearly unrelated contexts, with the unrelated context occupying most of the batch.
+3. **Sustained Presence Rule**: Consider an app/window a true distraction only if it remains the dominant state across the batch (i.e., appears in most observations or for contiguous stretches approximating at least ~30 seconds). Single observations or brief checks—such as a quick peek at System Settings—should not trigger a notification.
 4. **Majority Rules**: If most observations show goal-aligned behavior, do NOT notify, even if some individual observations don't.
 5. **Only ONE Notification**: Only ONE notification can be sent from this entire batch. If you decide to notify, pick the observation that best represents the overall pattern of concern, and set `should_notify=false` for all others.
 
@@ -941,6 +942,50 @@ Return a SINGLE decision for the entire batch in this exact JSON format:
         batch_start_time = datetime.now()
         self.logger.info(f"[{batch_start_time.strftime('%H:%M:%S.%f')[:-3]}] Processing {len(batched_observations)} observations for notifications (batched)")
         
+        # Filter out observations older than last notification to prevent stale notifications
+        # This prevents notifications based on old behavior after the user has already changed
+        if self.last_notification_time is not None:
+            filtered_observations = []
+            for obs in batched_observations:
+                obs_timestamp_str = obs.get('timestamp', '')
+                if obs_timestamp_str:
+                    try:
+                        # Parse observation timestamp (handle both with and without timezone)
+                        obs_timestamp_str_clean = obs_timestamp_str.replace('Z', '+00:00')
+                        obs_timestamp = datetime.fromisoformat(obs_timestamp_str_clean)
+                        
+                        # Ensure both timestamps are timezone-aware (UTC) for proper comparison
+                        if obs_timestamp.tzinfo is None:
+                            # If observation timestamp is naive, assume it's UTC
+                            obs_timestamp = obs_timestamp.replace(tzinfo=timezone.utc)
+                        if self.last_notification_time.tzinfo is None:
+                            # If last_notification_time is naive, assume it's UTC
+                            last_notif_utc = self.last_notification_time.replace(tzinfo=timezone.utc)
+                        else:
+                            last_notif_utc = self.last_notification_time
+                        
+                        # Only include observations collected AFTER last notification
+                        if obs_timestamp > last_notif_utc:
+                            filtered_observations.append(obs)
+                        else:
+                            self.logger.info(f"Filtering out stale observation {obs.get('id', 'unknown')} (collected {obs_timestamp_str} before last notification at {self.last_notification_time})")
+                    except Exception as e:
+                        self.logger.warning(f"Could not parse timestamp for observation {obs.get('id', 'unknown')}: {e}. Including observation to be safe.")
+                        # Include if we can't parse (better to include than exclude)
+                        filtered_observations.append(obs)
+                else:
+                    # Include if no timestamp (better to include than exclude)
+                    self.logger.warning(f"Observation {obs.get('id', 'unknown')} has no timestamp. Including to be safe.")
+                    filtered_observations.append(obs)
+            
+            if not filtered_observations:
+                self.logger.info("All observations filtered out (all older than last notification). Skipping notification decision.")
+                return
+            
+            original_count = len(batched_observations)
+            batched_observations = filtered_observations
+            self.logger.info(f"Filtered to {len(batched_observations)} recent observations (after last notification at {self.last_notification_time}). Removed {original_count - len(batched_observations)} stale observations.")
+        
         # Prepare all contexts in parallel (DB queries, BM25 searches)
         contexts = await self._prepare_observation_contexts(batched_observations)
         
@@ -1055,8 +1100,8 @@ Return a SINGLE decision for the entire batch in this exact JSON format:
             
             nudge_id = str(uuid.uuid4())
             
-            # Update cooldown timer
-            self.last_notification_time = datetime.now()
+            # Update cooldown timer (store as UTC to match observation timestamps)
+            self.last_notification_time = datetime.now(timezone.utc)
             
             # Track sent notification (before displaying, so it's logged even if display fails)
             self.sent_notifications.append({
@@ -1655,7 +1700,14 @@ Return a SINGLE decision for the entire batch in this exact JSON format:
         if self.last_notification_time is None:
             return False, 0.0
         
-        time_since_last = (datetime.now() - self.last_notification_time).total_seconds()
+        # Ensure both timestamps are timezone-aware for proper comparison
+        now = datetime.now(timezone.utc)
+        last_notif = self.last_notification_time
+        if last_notif.tzinfo is None:
+            # If last_notification_time is naive, assume it's UTC
+            last_notif = last_notif.replace(tzinfo=timezone.utc)
+        
+        time_since_last = (now - last_notif).total_seconds()
         
         if time_since_last < self.min_notification_interval:
             remaining = self.min_notification_interval - time_since_last
