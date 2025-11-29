@@ -216,6 +216,8 @@ Your goal is to help {user_name} change behaviors they want to improve by sendin
 ## Learning from Previous Actions
 {learning_context}
 
+{learning_examples}
+
 ## Cooldown Status
 {cooldown_status}
 

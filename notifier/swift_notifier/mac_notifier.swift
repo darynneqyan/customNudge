@@ -78,13 +78,13 @@ class NotificationManager {
         // Define notification actions
         let thanksAction = UNNotificationAction(
             identifier: ACTION_THANKS,
-            title: "Thanks!",
+            title: "Got it",
             options: []
         )
         
         let notNowAction = UNNotificationAction(
             identifier: ACTION_NOT_NOW,
-            title: "Not now",
+            title: "No thanks",
             options: []
         )
         

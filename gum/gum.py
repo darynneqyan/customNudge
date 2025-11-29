@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import os
+# Suppress gRPC fork warnings (harmless but noisy)
+# These occur when subprocess.run() forks while gRPC connections are active
+os.environ.setdefault('GRPC_VERBOSITY', 'ERROR')  # Only show errors, not warnings
+os.environ.setdefault('GRPC_TRACE', '')  # Disable trace logging
+
 import asyncio
 import json
 import logging
-import os
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone

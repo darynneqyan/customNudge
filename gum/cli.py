@@ -2,6 +2,11 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
 
 import os
+# Suppress gRPC fork warnings (harmless but noisy)
+# These occur when subprocess.run() forks while gRPC connections are active
+os.environ.setdefault('GRPC_VERBOSITY', 'ERROR')  # Only show errors, not warnings
+os.environ.setdefault('GRPC_TRACE', '')  # Disable trace logging
+
 import argparse
 import asyncio
 import shutil  

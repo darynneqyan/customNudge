@@ -11,6 +11,7 @@ through structured LLM analysis of user behavior patterns.
 
 import json
 import logging
+import re
 from typing import Dict, Any, Tuple, List
 import os
 
@@ -130,7 +131,7 @@ Since system state is {pattern}, use observations to determine final score:
             # Step 1: Evaluate system capture
             compliance_percentage, pattern = await self._classify_snapshots(nudge, post_nudge_system_state_snapshots or [])
             
-            # Step 1.1: If compliant (>70%), return 1
+            # Step 1.1: If compliant (>70%), return 1  #hyperparameter, can tune - compliance threshold
             if pattern == "Compliant":
                 reasoning = f"System state shows clear compliance ({compliance_percentage:.1f}% goal-aligned snapshots). User acted on the nudge."
                 self.logger.info(f"Judge evaluation: score=1 (Compliant), reasoning={reasoning[:100]}...")
@@ -155,6 +156,16 @@ Since system state is {pattern}, use observations to determine final score:
                 messages=[{"role": "user", "content": formatted_prompt}],
                 response_format={"type": "text"}
             )
+            
+            # Check for truncation or empty response
+            if not response or len(response.strip()) < 5:
+                self.logger.warning(f"Empty or very short response from LLM judge (length: {len(response) if response else 0})")
+                return {
+                    "score": 0,
+                    "reasoning": "LLM response was empty or truncated",
+                    "compliance_percentage": compliance_percentage,
+                    "pattern": pattern
+                }
             
             # Step 2: Return 0, 1, or 0.5 based on observations
             score, reasoning = self._parse_judge_response(response)
@@ -204,10 +215,10 @@ Since system state is {pattern}, use observations to determine final score:
         # Calculate compliance percentage
         compliance_percentage = (goal_aligned_count / len(snapshots)) * 100
         
-        # Classify pattern
-        if compliance_percentage > 70:
+        # Classify pattern  #hyperparameter, can tune - compliance percentage thresholds
+        if compliance_percentage > 70:  #hyperparameter, can tune
             pattern = "Compliant"
-        elif compliance_percentage >= 30:
+        elif compliance_percentage >= 30:  #hyperparameter, can tune
             pattern = "Partially Compliant"
         else:
             pattern = "Non-Compliant"
@@ -252,14 +263,28 @@ Since system state is {pattern}, use observations to determine final score:
                 response_format={"type": "text"}
             )
             
+            # Check for truncation (response might be cut off)
+            if not response or len(response.strip()) < 10:
+                self.logger.warning(f"Empty or very short response from snapshot evaluation")
+                return False
+            
+            # Normalize response for parsing (handle truncation, whitespace, case)
+            response_upper = response.upper().strip()
+            
             # Parse response to determine if goal-aligned
-            if "GOAL_ALIGNED: true" in response.upper() or "GOAL_ALIGNED:true" in response.upper():
+            # Look for GOAL_ALIGNED marker (may be truncated, so check for partial matches)
+            if "GOAL_ALIGNED: TRUE" in response_upper or "GOAL_ALIGNED:TRUE" in response_upper:
                 return True
-            elif "GOAL_ALIGNED: false" in response.upper() or "GOAL_ALIGNED:false" in response.upper():
+            elif "GOAL_ALIGNED: FALSE" in response_upper or "GOAL_ALIGNED:FALSE" in response_upper:
+                return False
+            elif "GOAL_ALIGNED: TRUE" in response_upper[:200]:  # Check first 200 chars for truncated responses
+                return True
+            elif "GOAL_ALIGNED: FALSE" in response_upper[:200]:
                 return False
             else:
-                # Default to False if unclear
-                self.logger.warning(f"Unclear response from snapshot evaluation: {response[:100]}")
+                # Default to False if unclear - log full response for debugging
+                response_preview = response[:200] + ("..." if len(response) > 200 else "")
+                self.logger.warning(f"Unclear response from snapshot evaluation (length: {len(response)}): {response_preview}")
                 return False
                 
         except Exception as e:
@@ -293,33 +318,40 @@ Since system state is {pattern}, use observations to determine final score:
         
         This method handles various response formats and extracts the
         numerical score (0, 0.5, or 1) and reasoning text from the LLM response.
+        Handles truncated responses gracefully.
         
         Args:
-            response: Raw LLM response string
+            response: Raw LLM response string (may be truncated)
             
         Returns:
             Tuple of (score, reasoning) where score is 0, 0.5, or 1
         """
         try:
+            # Check for truncation indicators
+            is_truncated = len(response) < 50 or response.endswith("...") or response.endswith("Th")
+            
             # Extract reasoning from <reasoning> tags
             reasoning_start = response.find("<reasoning>")
             reasoning_end = response.find("</reasoning>")
             
             if reasoning_start != -1 and reasoning_end != -1:
                 reasoning = response[reasoning_start + 11:reasoning_end].strip()
+            elif reasoning_start != -1:
+                # Truncated - reasoning tag opened but not closed
+                reasoning = response[reasoning_start + 11:].strip() + " [response truncated]"
             else:
                 # Fallback: look for reasoning in the response
-                reasoning = "No structured reasoning provided"
-                if len(response) > 200:
-                    reasoning = response[:200] + "..."
-                else:
-                    reasoning = response
+                # Take first 300 chars as reasoning if no tags found
+                reasoning = response[:300].strip()
+                if len(response) > 300:
+                    reasoning += "... [response may be truncated]"
             
             # Extract score (0, 0.5, or 1) - look for the last occurrence
+            # Handle truncated responses by checking entire response, not just last lines
             lines = response.strip().split('\n')
             score = None
             
-            # Look for score in the last few lines
+            # First, look for score in the last few lines (most reliable if not truncated)
             for line in reversed(lines[-5:]):
                 line = line.strip()
                 if line in ['0', '0.5', '1']:
@@ -330,24 +362,51 @@ Since system state is {pattern}, use observations to determine final score:
                     score = 0.5
                     break
             
-            # Fallback: look for score anywhere in response
+            # If not found in last lines, search entire response (handles truncation)
             if score is None:
-                # Check for 0.5 first (most specific)
-                if '0.5' in response or '.5' in response:
-                    score = 0.5
-                elif '1' in response and '0' not in response and '0.5' not in response:
-                    score = 1.0
-                elif '0' in response and '0.5' not in response:
-                    score = 0.0
-                else:
-                    # Default to 0 if unclear
-                    score = 0.0
-                    reasoning = f"Unclear response, defaulting to 0. Response: {response[:100]}..."
+                # Check for explicit score patterns anywhere in response
+                response_upper = response.upper()
+                
+                # Look for patterns like "score: 1", "score=0.5", etc.
+                score_patterns = [
+                    r'score[:\s=]+(0\.5|1\.0|1|0)',
+                    r'effectiveness[:\s=]+(0\.5|1\.0|1|0)',
+                    r'^[01](\.5)?\s*$',  # Standalone number on its own line
+                ]
+                
+                for pattern in score_patterns:
+                    match = re.search(pattern, response_upper)
+                    if match:
+                        score_str = match.group(1) if match.lastindex else match.group(0)
+                        try:
+                            score = float(score_str)
+                            break
+                        except ValueError:
+                            continue
+                
+                # Fallback: look for score anywhere in response (simple pattern matching)
+                if score is None:
+                    # Check for 0.5 first (most specific)
+                    if '0.5' in response or '.5' in response:
+                        score = 0.5
+                    elif '1' in response and '0' not in response and '0.5' not in response:
+                        score = 1.0
+                    elif '0' in response and '0.5' not in response:
+                        score = 0.0
+                    else:
+                        # Default to 0 if unclear
+                        score = 0.0
+                        reasoning = f"Unclear response (possibly truncated), defaulting to 0. Response length: {len(response)}. Preview: {response[:150]}..."
+            
+            # Log if response was truncated
+            if is_truncated:
+                self.logger.warning(f"LLM response appears truncated (length: {len(response)}). Extracted score: {score}")
             
             return score, reasoning
                 
         except Exception as e:
             self.logger.error(f"Error parsing judge response: {e}")
+            self.logger.error(f"Response was: {response[:200] if response else 'None'}")
             return 0.0, f"Parse error: {str(e)}"
     
     async def batch_evaluate(self, nudge_data_pairs: list) -> list:

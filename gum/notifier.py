@@ -4,8 +4,14 @@ Simple GUM Notification Module
 Integrates with GUM's batching pipeline and uses BM25 for similarity search.
 """
 
+import os
+# Suppress gRPC fork warnings (harmless but noisy)
+# These occur when subprocess.run() forks while gRPC connections are active
+os.environ.setdefault('GRPC_VERBOSITY', 'ERROR')  # Only show errors, not warnings
+os.environ.setdefault('GRPC_TRACE', '')  # Disable trace logging
+
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import json
@@ -13,6 +19,10 @@ from pathlib import Path
 import asyncio
 import subprocess
 import uuid
+import sys
+
+# File locking for macOS (using fcntl)
+import fcntl
 
 from .db_utils import search_propositions_bm25, search_observations_bm25, get_related_propositions
 from .models import Observation, Proposition
@@ -75,6 +85,10 @@ class GUMNotifier:
         self.observation_manager = ObservationWindowManager(user_name, gum_instance=self.gum_instance, notifier=self)
         self.adaptive_nudge_enabled = True  # Can be controlled via environment variable
         
+        # In-Context Learning Configuration
+        self.in_context_learning_enabled = True  # Feature flag for in-context learning
+        self.policy_version = "v1.0"  # Policy version for tracking decision-making policy iterations
+        
         # Load existing contexts if available
         self._load_notification_log()
         # Load existing decisions if available
@@ -82,7 +96,7 @@ class GUMNotifier:
 
         # Cooldown configuration
         self.last_notification_time = None
-        self.min_notification_interval = 120 # 2 minutes
+        self.min_notification_interval = 120  # 2 minutes #hyperparameter, can tune
         
         # Button feedback and session tracking
         self.button_feedback: Dict[str, str] = {}
@@ -138,7 +152,12 @@ class GUMNotifier:
             self.logger.error(f"Error saving notification log: {e}")
     
     def _get_learning_context(self, notification_type: str = None) -> str:
-        """Extract learning insights from training data for similar notification types."""
+        """
+        Extract learning insights from training data for similar notification types.
+        
+        NOTE: notification_type parameter is currently unused (always called with None).
+        Kept for potential future use to filter by specific notification types.
+        """
         try:
             from .adaptive_nudge.training_logger import TrainingDataLogger
             training_logger = TrainingDataLogger(self.user_name)
@@ -188,9 +207,10 @@ class GUMNotifier:
                 learning_context += f"- [{pattern['timestamp']}] {pattern['type']}: {status}\n  Reasoning: {pattern['reasoning']}\n"
             
             # Add recommendations
-            if effectiveness_rate < 0.3:
+            #hyperparameter, can tune - effectiveness rate thresholds
+            if effectiveness_rate < 0.3:  #hyperparameter, can tune
                 learning_context += "\n**Learning Insight:** Low effectiveness rate suggests need for different approach or timing."
-            elif effectiveness_rate > 0.7:
+            elif effectiveness_rate > 0.7:  #hyperparameter, can tune
                 learning_context += "\n**Learning Insight:** High effectiveness rate - continue similar approach."
             else:
                 learning_context += "\n**Learning Insight:** Mixed results - consider context-specific adjustments."
@@ -201,7 +221,7 @@ class GUMNotifier:
             self.logger.error(f"Error getting learning context: {e}")
             return "Unable to retrieve learning context from training data."
     
-    def _save_decision(self, context: NotificationContext, decision: NotificationDecision):
+    def _save_decision(self, context: NotificationContext, decision: NotificationDecision, examples_used: List[str] = None):
         """Save a notification decision to separate file for GUI."""
         try:
             decision_entry = {
@@ -222,17 +242,90 @@ class GUMNotifier:
                 'blocked_reason': None  # Will be set if blocked by cooldown
             }
             
+            # Add in-context learning fields if feature enabled
+            if self.in_context_learning_enabled:
+                try:
+                    # NOTE: nudge_id is NOT generated here - only generated when notification is actually sent
+                    # This prevents creating IDs for decisions that never result in notifications
+                    
+                    # Calculate timing and frequency fields
+                    time_since_last = self._calculate_time_since_last_nudge()
+                    time_bucket = self._get_time_bucket(time_since_last)
+                    frequency_context = self._calculate_frequency_context()
+                    
+                    # Calculate goal alignment fields
+                    goal_alignment = self._calculate_goal_alignment(decision.goal_relevance_score)
+                    goal_bucket = self._get_goal_alignment_bucket(decision.goal_relevance_score)
+                    
+                    # Generate observation pattern summary
+                    observation_pattern = self._generate_observation_pattern_summary(context)
+                    
+                    # Count effective examples available
+                    examples_available = self._count_effective_examples()
+                    
+                    # Add all new fields (nudge_id will be added later if notification is sent)
+                    decision_entry.update({
+                        'policy_version': self.policy_version,
+                        'time_since_last_nudge': time_since_last if time_since_last != float('inf') else None,
+                        'time_since_last_nudge_bucket': time_bucket,
+                        'frequency_context': frequency_context,
+                        'goal_alignment': goal_alignment,
+                        'goal_alignment_bucket': goal_bucket,
+                        'observation_pattern_summary': observation_pattern,
+                        'examples_available_count': examples_available,
+                        'examples_used': examples_used or [],
+                        'examples_used_count': len(examples_used) if examples_used else 0
+                    })
+                except Exception as e:
+                    self.logger.warning(f"Error calculating in-context learning fields: {e}")
+                    # Continue without new fields if calculation fails
+            
             # Verify reasoning is present before saving
             if not decision.reasoning or len(decision.reasoning.strip()) == 0:
                 self.logger.error(f"Attempting to save decision with empty reasoning! Observation ID: {context.observation_id}")
             
             self.decisions_log.append(decision_entry)
             
+            # Save with file locking to prevent race conditions in async processing
             self.logger.info(f"Saving decision to {self.decisions_file}")
-            with open(self.decisions_file, 'w') as f:
-                json.dump(self.decisions_log, f, indent=2)
-                f.flush()  # Ensure file is written to OS buffer immediately
-            self.logger.info(f"Decision saved successfully")
+            try:
+                with open(self.decisions_file, 'w') as f:
+                    # Acquire exclusive lock (blocks until available)
+                    try:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    except (OSError, IOError) as e:
+                        self.logger.warning(f"File lock acquisition failed: {e}, continuing without lock")
+                    
+                    try:
+                        # Re-read file to get latest state (in case another process wrote)
+                        # This prevents overwriting concurrent writes
+                        try:
+                            with open(self.decisions_file, 'r') as read_f:
+                                existing_log = json.load(read_f)
+                                # Merge: append new entry if not already present
+                                if decision_entry not in existing_log:
+                                    existing_log.append(decision_entry)
+                                self.decisions_log = existing_log
+                        except (FileNotFoundError, json.JSONDecodeError):
+                            # File doesn't exist or is corrupted, use in-memory log
+                            pass
+                        
+                        # Write updated log
+                        json.dump(self.decisions_log, f, indent=2)
+                        f.flush()  # Ensure file is written to OS buffer immediately
+                    finally:
+                        # Release lock
+                        try:
+                            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                        except (OSError, IOError):
+                            pass  # Ignore unlock errors
+                self.logger.info(f"Decision saved successfully")
+            except (OSError, IOError) as e:
+                # Fallback if file operations fail
+                self.logger.warning(f"File operation failed, using fallback: {e}")
+                with open(self.decisions_file, 'w') as f:
+                    json.dump(self.decisions_log, f, indent=2)
+                    f.flush()
         except Exception as e:
             self.logger.error(f"Error saving decision: {e}")
             import traceback
@@ -249,11 +342,27 @@ class GUMNotifier:
                     last_decision['cooldown_remaining'] = remaining
                     last_decision['should_notify'] = False  # Mark as not sent due to cooldown
                     
-                    # Save updated decision
-                    with open(self.decisions_file, 'w') as f:
-                        json.dump(self.decisions_log, f, indent=2)
-                        f.flush()  # Ensure file is written to OS buffer immediately
-                    self.logger.info(f"Updated decision with cooldown information")
+                    # Save updated decision with file locking
+                    try:
+                        with open(self.decisions_file, 'w') as f:
+                            try:
+                                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                            except (OSError, IOError) as e:
+                                self.logger.warning(f"File lock acquisition failed: {e}")
+                            try:
+                                json.dump(self.decisions_log, f, indent=2)
+                                f.flush()
+                            finally:
+                                try:
+                                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                                except (OSError, IOError):
+                                    pass
+                        self.logger.info(f"Updated decision with cooldown information")
+                    except (OSError, IOError) as e:
+                        self.logger.warning(f"File operation failed when updating cooldown: {e}")
+                        with open(self.decisions_file, 'w') as f:
+                            json.dump(self.decisions_log, f, indent=2)
+                            f.flush()
         except Exception as e:
             self.logger.error(f"Error updating decision with cooldown: {e}")
     
@@ -262,7 +371,7 @@ class GUMNotifier:
         Update a decision entry with effectiveness evaluation results.
         
         Args:
-            nudge_id: The nudge ID to match
+            nudge_id: The nudge ID to match (must not be None)
             judge_score: Dictionary containing:
                 - score: 0, 0.5, or 1
                 - reasoning: LLM's reasoning
@@ -270,25 +379,65 @@ class GUMNotifier:
                 - pattern: "Compliant", "Partially Compliant", or "Non-Compliant"
         """
         try:
+            # Validate nudge_id
+            if not nudge_id:
+                self.logger.error("Cannot update decision: nudge_id is None or empty")
+                return
+            
+            # Validate and normalize effectiveness score
+            score = judge_score.get('score', 0)
+            if score not in [0, 0.5, 1.0]:
+                self.logger.warning(f"Invalid effectiveness score {score}, normalizing to valid value")
+                # Normalize: round to nearest valid value  #hyperparameter, can tune - score normalization thresholds
+                if score < 0.25:  #hyperparameter, can tune
+                    score = 0.0
+                elif score < 0.75:  #hyperparameter, can tune
+                    score = 0.5
+                else:
+                    score = 1.0
+            
             # Find decision entry by nudge_id
+            decision_found = False
             for decision in self.decisions_log:
                 if decision.get('nudge_id') == nudge_id:
-                    decision['effectiveness_score'] = judge_score.get('score', 0)
+                    decision['effectiveness_score'] = score
                     decision['effectiveness_reasoning'] = judge_score.get('reasoning', '')
                     decision['compliance_percentage'] = judge_score.get('compliance_percentage', 0)
                     decision['compliance_pattern'] = judge_score.get('pattern', 'Unknown')
                     decision['evaluation_source'] = 'system_capture' if judge_score.get('pattern') == 'Compliant' else 'observations'
-                    
-                    # Save updated decision
-                    with open(self.decisions_file, 'w') as f:
-                        json.dump(self.decisions_log, f, indent=2)
-                        f.flush()  # Ensure file is written to OS buffer immediately
-                    self.logger.info(f"Updated decision {nudge_id} with effectiveness data")
-                    return
+                    decision_found = True
+                    break
             
-            self.logger.warning(f"Could not find decision entry with nudge_id: {nudge_id}")
+            if not decision_found:
+                self.logger.warning(f"Could not find decision entry with nudge_id: {nudge_id}")
+                return
+            
+            # Save updated decision with file locking
+            try:
+                with open(self.decisions_file, 'w') as f:
+                    try:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    except (OSError, IOError) as e:
+                        self.logger.warning(f"File lock acquisition failed: {e}")
+                    try:
+                        json.dump(self.decisions_log, f, indent=2)
+                        f.flush()
+                    finally:
+                        try:
+                            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                        except (OSError, IOError):
+                            pass
+                self.logger.info(f"Updated decision {nudge_id} with effectiveness data")
+            except (OSError, IOError) as e:
+                self.logger.warning(f"File operation failed when updating effectiveness: {e}")
+                with open(self.decisions_file, 'w') as f:
+                    json.dump(self.decisions_log, f, indent=2)
+                    f.flush()
+                self.logger.info(f"Updated decision {nudge_id} with effectiveness data (fallback)")
         except Exception as e:
             self.logger.error(f"Error updating decision with effectiveness: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
     
     
     async def _find_similar_propositions(self, propositions: List[Proposition], 
@@ -409,7 +558,7 @@ class GUMNotifier:
                                          observation_content: str,
                                          generated_propositions: List[Dict[str, Any]],
                                          similar_propositions: List[Dict[str, Any]],
-                                         similar_observations: List[Dict[str, Any]]) -> Optional[NotificationDecision]:
+                                         similar_observations: List[Dict[str, Any]]) -> tuple[Optional[NotificationDecision], List[str]]:
         """
         Use LLM to decide whether to send a notification.
         
@@ -431,13 +580,13 @@ class GUMNotifier:
         # Format similar propositions
         sim_props_text = "\n".join([
             f"- {p['text']} (confidence: {p['confidence']}/10, relevance: {p['relevance_score']:.2f})"
-            for p in similar_propositions[:5]
+            for p in similar_propositions[:5]  #hyperparameter, can tune - max similar items
         ]) if similar_propositions else "None"
         
         # Format similar observations
         sim_obs_text = "\n".join([
             f"- {o['content'][:100]}... (relevance: {o['relevance_score']:.2f})"
-            for o in similar_observations[:5]
+            for o in similar_observations[:5]  #hyperparameter, can tune - max similar items
         ]) if similar_observations else "None"
         
         # Format notification history (last 5)
@@ -464,6 +613,37 @@ class GUMNotifier:
         else:
             cooldown_status = "✅ Cooldown inactive: No notification sent in the last 2 minutes. Ready to send if observation is relevant."
         
+        # Select examples for in-context learning (if enabled)
+        # Use preliminary selection (any goal bucket) since we don't know goal bucket yet
+        # After decision, we'll re-select with correct bucket for accurate tracking
+        preliminary_examples = []
+        examples_used = []
+        learning_examples_text = ""
+        if self.in_context_learning_enabled:
+            try:
+                # Calculate time bucket
+                time_since_last = self._calculate_time_since_last_nudge()
+                time_bucket = self._get_time_bucket(time_since_last)
+                
+                # Preliminary selection: match on time bucket only (any goal bucket)
+                # This gives LLM some context even before we know the goal bucket
+                preliminary_examples = self._select_examples_any_goal(time_bucket)
+                
+                # Track which examples we're showing to LLM (for accurate logging)
+                examples_used = [ex.get('nudge_id') or ex.get('decision_id', '') 
+                                for ex in preliminary_examples 
+                                if ex.get('nudge_id') or ex.get('decision_id')]
+                
+                # Format examples for prompt
+                learning_examples_text = self._format_examples_for_prompt(preliminary_examples)
+                
+                if learning_examples_text:
+                    self.logger.info(f"Selected {len(preliminary_examples)} examples for in-context learning (preliminary, any goal bucket)")
+            except Exception as e:
+                self.logger.warning(f"Error selecting examples: {e}")
+                examples_used = []
+                learning_examples_text = ""
+        
         # Construct prompt
         prompt = NOTIFICATION_DECISION_PROMPT.format(
             user_name=self.user_name,
@@ -474,6 +654,7 @@ class GUMNotifier:
             similar_observations=sim_obs_text,
             notification_history=notif_history_text,
             learning_context=learning_context,
+            learning_examples=learning_examples_text,
             cooldown_status=cooldown_status
         )
         
@@ -542,13 +723,21 @@ class GUMNotifier:
                 f"urgency={decision.urgency_score}, impact={decision.impact_score}"
             )
             
-            return decision
+            # Note: examples_used already contains the examples that were shown to LLM (preliminary selection)
+            # We keep these for accurate tracking of what influenced the decision
+            # Optionally, we can also track the "ideal" examples that would match the final goal bucket
+            # but for now, we track what was actually shown to maintain consistency
+            
+            if self.in_context_learning_enabled and examples_used:
+                self.logger.info(f"Examples shown to LLM (preliminary): {len(examples_used)}")
+            
+            return decision, examples_used
                 
         except Exception as e:
             self.logger.error(f"Error making notification decision: {e}")
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
-            return None
+            return None, []
     
     async def process_observation_batch(self, batched_observations: List[Dict[str, Any]]):
         """
@@ -611,7 +800,7 @@ class GUMNotifier:
                 
                 # Use LLM to decide whether to notify (timeout protects against slow API responses)
                 try:
-                    decision = await asyncio.wait_for(
+                    decision, examples_used = await asyncio.wait_for(
                         self._make_notification_decision(
                             observation_content,
                             generated_props_dict,
@@ -625,11 +814,12 @@ class GUMNotifier:
                         f"⚠️ LLM decision timed out for observation {observation_id}; skipping notification"
                     )
                     decision = None
+                    examples_used = []
                 
                 if decision:
                     self.logger.info(f"LLM made a decision: should_notify={decision.should_notify}")
-                    # Save decision to file for GUI
-                    self._save_decision(context, decision)
+                    # Save decision to file for GUI (with examples_used)
+                    self._save_decision(context, decision, examples_used)
                     
                     # Log decision
                     goal_relevance = f"{decision.goal_relevance_score}/10" if decision.goal_relevance_score is not None else "N/A (no goal)"
@@ -676,14 +866,41 @@ class GUMNotifier:
                         print(f"{decision.notification_message}")
                         print(f"{'='*60}\n")
                         
-                        # previously:
-                        # # Display native macOS notification
-                        # self._display_notification(decision.notification_message, decision.notification_type)
+                        # NOTE: Old synchronous notification display method removed.
+                        # Now using async _display_notification_with_swift_async() via asyncio.create_task()
 
+                        # Generate nudge_id NOW (only when notification is actually being sent)
                         nudge_id = str(uuid.uuid4())
                         
+                        # Update decision entry with nudge_id (so it can be tracked)
+                        if self.decisions_log:
+                            last_decision = self.decisions_log[-1]
+                            # Only update if this decision hasn't been updated yet (match by timestamp)
+                            if last_decision.get('timestamp') == context.timestamp:
+                                last_decision['nudge_id'] = nudge_id
+                                # Save updated decision with file locking
+                                try:
+                                    with open(self.decisions_file, 'w') as f:
+                                        try:
+                                            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                                        except (OSError, IOError) as e:
+                                            self.logger.warning(f"File lock acquisition failed: {e}")
+                                        try:
+                                            json.dump(self.decisions_log, f, indent=2)
+                                            f.flush()
+                                        finally:
+                                            try:
+                                                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                                            except (OSError, IOError):
+                                                pass
+                                except (OSError, IOError) as e:
+                                    self.logger.warning(f"File operation failed when updating nudge_id: {e}")
+                                    with open(self.decisions_file, 'w') as f:
+                                        json.dump(self.decisions_log, f, indent=2)
+                                        f.flush()
+                        
                         # Update cooldown timer
-                        self.last_notification_time = datetime.now()
+                        self.last_notification_time = datetime.now(timezone.utc)
                         
                         # Track sent notification (before displaying, so it's logged even if display fails)
                         self.sent_notifications.append({
@@ -699,13 +916,27 @@ class GUMNotifier:
                         
                         # Display notification asynchronously (non-blocking)
                         # Start the notification task but don't wait for it - batch processing continues immediately
-                        asyncio.create_task(
+                        task = asyncio.create_task(
                             self._display_notification_with_swift_async(
                                 decision.notification_message,
                                 decision.notification_type,
                                 nudge_id
                             )
                         )
+                        
+                        # Add error handler to catch any unhandled exceptions
+                        def handle_notification_error(t):
+                            """Handle notification task completion and log any errors."""
+                            try:
+                                t.result()  # This will raise if task had an exception
+                            except Exception as e:
+                                self.logger.error(f"Unhandled exception in notification task for {nudge_id}: {e}")
+                                import traceback
+                                self.logger.error(f"Traceback: {traceback.format_exc()}")
+                                # Record failure as no_response
+                                self._record_feedback(nudge_id, "no_response")
+                        
+                        task.add_done_callback(handle_notification_error)
                         self.logger.info(f"📢 Notification task started for nudge {nudge_id} (non-blocking)")
                         
                         # ADAPTIVE NUDGE ENGINE: Start observation window
@@ -723,23 +954,46 @@ class GUMNotifier:
                                     },
                                     'nudge_content': decision.notification_message,
                                     'nudge_type': decision.notification_type,
-                                    'observation_duration': 120,  # 2 minutes
+                                    'observation_duration': 120,  # 2 minutes  #hyperparameter, can tune
                                     'decision_timestamp': context.timestamp,  # For matching decision entry
                                     'decision_file': str(self.decisions_file)  # For updating decision entry
                                 }
                                 
-                                # Start observation window asynchronously
-                                nudge_id = await self.observation_manager.start_observation(nudge_data)
+                                # Pass nudge_id to observation manager so it uses the same ID
+                                nudge_data['nudge_id'] = nudge_id
                                 
-                                # Add nudge_id to the most recent decision entry
+                                # Start observation window asynchronously
+                                # nudge_id is already set in decision entry and passed in nudge_data
+                                observation_nudge_id = await self.observation_manager.start_observation(nudge_data)
+                                
+                                # Verify nudge_id consistency (should already match, but check for safety)
                                 if self.decisions_log:
                                     last_decision = self.decisions_log[-1]
                                     if last_decision.get('timestamp') == context.timestamp:
-                                        last_decision['nudge_id'] = nudge_id
-                                        # Save updated decision
-                                        with open(self.decisions_file, 'w') as f:
-                                            json.dump(self.decisions_log, f, indent=2)
-                                            f.flush()  # Ensure file is written to OS buffer immediately
+                                        if last_decision.get('nudge_id') != nudge_id:
+                                            self.logger.warning(f"nudge_id mismatch: decision has {last_decision.get('nudge_id')}, notification has {nudge_id}")
+                                            # Update to match notification (source of truth)
+                                            last_decision['nudge_id'] = nudge_id
+                                            # Save updated decision with file locking
+                                            try:
+                                                with open(self.decisions_file, 'w') as f:
+                                                    try:
+                                                        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                                                    except (OSError, IOError) as e:
+                                                        self.logger.warning(f"File lock acquisition failed: {e}")
+                                                    try:
+                                                        json.dump(self.decisions_log, f, indent=2)
+                                                        f.flush()
+                                                    finally:
+                                                        try:
+                                                            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                                                        except (OSError, IOError):
+                                                            pass
+                                            except (OSError, IOError) as e:
+                                                self.logger.warning(f"File operation failed when fixing nudge_id: {e}")
+                                                with open(self.decisions_file, 'w') as f:
+                                                    json.dump(self.decisions_log, f, indent=2)
+                                                    f.flush()
                                 
                                 self.logger.info(f"Started adaptive nudge observation window with nudge_id: {nudge_id}")
                                 
@@ -782,46 +1036,49 @@ class GUMNotifier:
         # Return the app bundle path even if it doesn't exist (for error messages)
         return app_binary
     
-    def _start_notification_task(self, message: str, notification_type: str, nudge_id: str):
-        """
-        Start a notification task in the background without blocking.
-        
-        This method immediately starts the notification display process and returns,
-        allowing batch processing to continue. Feedback is collected asynchronously.
-        
-        Args:
-            message: The notification message content
-            notification_type: Type of notification (break, focus, etc.)
-            nudge_id: Unique identifier for this nudge
-        """
-        try:
-            # Get the current event loop - must be called from async context
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No running event loop - cannot use async fallback, just log and record
-            self.logger.warning(f"No event loop available for async notification - skipping notification")
-            self.logger.warning(f"Notification would have been: {message[:50]}...")
-            self._record_feedback(nudge_id, "no_response")
-            return
-        
-        # Create and fire off the background task - don't await it
-        task = loop.create_task(
-            self._display_notification_with_swift_async(message, notification_type, nudge_id)
-        )
-        
-        # Add error handler to catch any unhandled exceptions
-        def handle_task_done(task):
-            """Handle task completion and log any errors."""
-            try:
-                task.result()  # This will raise if task had an exception
-            except Exception as e:
-                self.logger.error(f"Unhandled exception in notification task for {nudge_id}: {e}")
-                import traceback
-                self.logger.error(f"Traceback: {traceback.format_exc()}")
-                # Record failure as no_response
-                self._record_feedback(nudge_id, "no_response")
-        
-        task.add_done_callback(handle_task_done)
+    # UNUSED: This method is not called anywhere. Notification display is handled directly
+    # via asyncio.create_task(_display_notification_with_swift_async(...)) in process_observation_batch()
+    # Keeping for potential future use or reference.
+    # def _start_notification_task(self, message: str, notification_type: str, nudge_id: str):
+    #     """
+    #     Start a notification task in the background without blocking.
+    #     
+    #     This method immediately starts the notification display process and returns,
+    #     allowing batch processing to continue. Feedback is collected asynchronously.
+    #     
+    #     Args:
+    #         message: The notification message content
+    #         notification_type: Type of notification (break, focus, etc.)
+    #         nudge_id: Unique identifier for this nudge
+    #     """
+    #     try:
+    #         # Get the current event loop - must be called from async context
+    #         loop = asyncio.get_running_loop()
+    #     except RuntimeError:
+    #         # No running event loop - cannot use async fallback, just log and record
+    #         self.logger.warning(f"No event loop available for async notification - skipping notification")
+    #         self.logger.warning(f"Notification would have been: {message[:50]}...")
+    #         self._record_feedback(nudge_id, "no_response")
+    #         return
+    #     
+    #     # Create and fire off the background task - don't await it
+    #     task = loop.create_task(
+    #         self._display_notification_with_swift_async(message, notification_type, nudge_id)
+    #     )
+    #     
+    #     # Add error handler to catch any unhandled exceptions
+    #     def handle_task_done(task):
+    #         """Handle task completion and log any errors."""
+    #         try:
+    #             task.result()  # This will raise if task had an exception
+    #         except Exception as e:
+    #             self.logger.error(f"Unhandled exception in notification task for {nudge_id}: {e}")
+    #             import traceback
+    #             self.logger.error(f"Traceback: {traceback.format_exc()}")
+    #             # Record failure as no_response
+    #             self._record_feedback(nudge_id, "no_response")
+    #     
+    #     task.add_done_callback(handle_task_done)
     
     async def _display_notification_with_swift_async(self, message: str, notification_type: str, nudge_id: str):
         """
@@ -1158,19 +1415,20 @@ class GUMNotifier:
         else:
             satisfaction_rate = thanks_count / total_responses
         
-        if satisfaction_rate < 0.3:
+        #hyperparameter, can tune - satisfaction rate thresholds
+        if satisfaction_rate < 0.3:  #hyperparameter, can tune
             self.satisfaction_multiplier = 2.0
             self.logger.warning(
                 f"😟 Low satisfaction rate ({satisfaction_rate:.1%}) - "
                 f"backing off (multiplier: {self.satisfaction_multiplier:.1f}x)"
             )
-        elif satisfaction_rate < 0.5:
+        elif satisfaction_rate < 0.5:  #hyperparameter, can tune
             self.satisfaction_multiplier = 1.5
             self.logger.info(
                 f"😐 Moderate satisfaction rate ({satisfaction_rate:.1%}) - "
                 f"reducing frequency (multiplier: {self.satisfaction_multiplier:.1f}x)"
             )
-        elif satisfaction_rate > 0.7:
+        elif satisfaction_rate > 0.7:  #hyperparameter, can tune
             self.satisfaction_multiplier = 1.0
             self.logger.info(
                 f"😊 High satisfaction rate ({satisfaction_rate:.1%}) - "
@@ -1196,11 +1454,12 @@ class GUMNotifier:
     
     def _get_satisfaction_status(self, satisfaction_rate: float) -> str:
         """Get human-readable satisfaction status."""
-        if satisfaction_rate < 0.3:
+        #hyperparameter, can tune - satisfaction rate thresholds
+        if satisfaction_rate < 0.3:  #hyperparameter, can tune
             return "low_satisfaction_backing_off"
-        elif satisfaction_rate < 0.5:
+        elif satisfaction_rate < 0.5:  #hyperparameter, can tune
             return "moderate_satisfaction_reducing_frequency"
-        elif satisfaction_rate > 0.7:
+        elif satisfaction_rate > 0.7:  #hyperparameter, can tune
             return "high_satisfaction_maintaining_pace"
         else:
             return "good_satisfaction_normal_operation"
@@ -1288,7 +1547,13 @@ class GUMNotifier:
         if self.last_notification_time is None:
             return False, 0.0
         
-        time_since_last = (datetime.now() - self.last_notification_time).total_seconds()
+        # Ensure both datetimes are timezone-aware for comparison
+        now = datetime.now(timezone.utc)
+        last_time = self.last_notification_time
+        if last_time.tzinfo is None:
+            # If last_notification_time is naive, assume UTC
+            last_time = last_time.replace(tzinfo=timezone.utc)
+        time_since_last = (now - last_time).total_seconds()
         
         if time_since_last < self.min_notification_interval:
             remaining = self.min_notification_interval - time_since_last
@@ -1299,3 +1564,324 @@ class GUMNotifier:
             return True, remaining
         
         return False, 0.0
+    
+    # ============================================================================
+    # In-Context Learning Helper Methods
+    # These methods are modular and can be removed without breaking existing code
+    # ============================================================================
+    
+    def _get_goal_alignment_bucket(self, goal_relevance_score: Optional[float]) -> str:
+        """
+        Get goal alignment bucket from goal relevance score.
+        
+        Args:
+            goal_relevance_score: Score from 0-10 or None
+            
+        Returns:
+            "high" (≥7), "medium" (4-6), "low" (<4), or "none" (None)
+        """
+        if goal_relevance_score is None:
+            return "none"
+        
+        # Validate and clamp score to valid range [0, 10]
+        goal_relevance_score = max(0.0, min(10.0, float(goal_relevance_score)))
+        
+        #hyperparameter, can tune - goal alignment bucket thresholds
+        if goal_relevance_score >= 7:  #hyperparameter, can tune
+            return "high"
+        elif goal_relevance_score >= 4:  #hyperparameter, can tune
+            return "medium"
+        else:
+            return "low"
+    
+    def _get_time_bucket(self, time_since_last_nudge: float) -> str:
+        """
+        Get time bucket for time since last nudge.
+        
+        Args:
+            time_since_last_nudge: Seconds since last notification (or float('inf') if no previous notification)
+            
+        Returns:
+            Bucket string: "0-60s", "60-120s", "120-180s", "180-300s", or "300s+"
+        """
+        # Handle float('inf') explicitly (cold start - no previous notification)
+        if time_since_last_nudge == float('inf'):
+            return "300s+"
+        
+        # Handle very large values (>= 300 seconds)
+        #hyperparameter, can tune - time bucket thresholds
+        if time_since_last_nudge >= 300:  #hyperparameter, can tune
+            return "300s+"
+        
+        if time_since_last_nudge < 60:  #hyperparameter, can tune
+            return "0-60s"
+        elif time_since_last_nudge < 120:  #hyperparameter, can tune
+            return "60-120s"
+        elif time_since_last_nudge < 180:  #hyperparameter, can tune
+            return "120-180s"
+        else:  # 180 <= time < 300
+            return "180-300s"
+    
+    def _calculate_goal_alignment(self, goal_relevance_score: Optional[float]) -> Optional[float]:
+        """
+        Convert goal relevance score (0-10) to goal alignment (0-1).
+        
+        Args:
+            goal_relevance_score: Score from 0-10 or None
+            
+        Returns:
+            Goal alignment from 0-1 or None
+        """
+        if goal_relevance_score is None:
+            return None
+        return goal_relevance_score / 10.0
+    
+    def _calculate_time_since_last_nudge(self) -> float:
+        """
+        Calculate seconds since last notification.
+        
+        Returns:
+            Seconds since last notification, or float('inf') if no previous notification
+        """
+        if self.last_notification_time is None:
+            return float('inf')
+        # Ensure both datetimes are timezone-aware for comparison
+        now = datetime.now(timezone.utc)
+        last_time = self.last_notification_time
+        if last_time.tzinfo is None:
+            # If last_notification_time is naive, assume UTC
+            last_time = last_time.replace(tzinfo=timezone.utc)
+        return (now - last_time).total_seconds()
+    
+    def _calculate_frequency_context(self) -> int:
+        """
+        Count number of nudges sent in the last hour.
+        
+        Returns:
+            Count of notifications in last hour
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            one_hour_ago = now - timedelta(hours=1)  #hyperparameter, can tune - frequency context window
+            count = 0
+            for notif in self.sent_notifications:
+                try:
+                    timestamp = notif.get('timestamp')
+                    if not timestamp:
+                        continue
+                    notif_time = datetime.fromisoformat(timestamp)
+                    # Ensure timezone-aware for comparison
+                    if notif_time.tzinfo is None:
+                        notif_time = notif_time.replace(tzinfo=timezone.utc)
+                    if notif_time >= one_hour_ago:
+                        count += 1
+                except (KeyError, ValueError, TypeError) as e:
+                    self.logger.warning(f"Skipping notification with invalid timestamp: {e}")
+                    continue
+            return count
+        except Exception as e:
+            self.logger.warning(f"Error calculating frequency context: {e}")
+            return 0
+    
+    def _generate_observation_pattern_summary(self, context: NotificationContext) -> str:
+        """
+        Generate brief summary of observation pattern for matching.
+        
+        Uses simple extraction (LLM generation would require async, so using fallback).
+        
+        Args:
+            context: Notification context with observation content
+            
+        Returns:
+            Brief summary string (max 100 chars)
+        """
+        try:
+            content = context.observation_content[:200].lower()
+            
+            # Pattern-based extraction (conservative approach)
+            if any(word in content for word in ["coding", "cursor", "editor", "programming", "code"]):
+                return "User coding in Cursor, goal-aligned" if "goal" in content else "User coding in Cursor"
+            elif any(word in content for word in ["browsing", "browser", "chrome", "safari", "firefox"]):
+                return "User browsing, potentially distracted"
+            elif any(word in content for word in ["distracted", "social", "twitter", "facebook", "instagram"]):
+                return "User distracted, goal-misaligned"
+            elif any(word in content for word in ["reading", "document", "pdf", "article"]):
+                return "User reading, goal-aligned"
+            else:
+                # Fallback: first 100 chars
+                summary = context.observation_content[:100]
+                return summary if len(summary) > 0 else "Unknown pattern"
+                
+        except Exception as e:
+            self.logger.warning(f"Error generating observation pattern summary: {e}")
+            return "Pattern summary unavailable"
+    
+    def _count_effective_examples(self) -> int:
+        """
+        Count effective examples available in decision log.
+        
+        Effective examples are decisions with:
+        - effectiveness_score >= 0.7  #hyperparameter, can tune - effectiveness threshold for examples
+        - should_notify == true
+        
+        Returns:
+            Count of effective examples
+        """
+        try:
+            count = 0
+            for decision in self.decisions_log:
+                effectiveness = decision.get('effectiveness_score')
+                should_notify = decision.get('should_notify', False)
+                if effectiveness is not None and effectiveness >= 0.7 and should_notify:  #hyperparameter, can tune - effectiveness threshold
+                    count += 1
+            return count
+        except Exception as e:
+            self.logger.warning(f"Error counting effective examples: {e}")
+            return 0
+    
+    def _select_examples_any_goal(self, current_time_bucket: str) -> List[Dict[str, Any]]:
+        """
+        Select examples matching time bucket only (for preliminary selection before goal is known).
+        
+        Args:
+            current_time_bucket: Current time bucket ("0-60s", "60-120s", etc.)
+            
+        Returns:
+            List of up to 5 example decisions matching the time bucket (any goal bucket)
+        """
+        if not self.in_context_learning_enabled:
+            return []
+        
+        try:
+            # Filter effective examples
+            effective = []
+            for decision in self.decisions_log:
+                effectiveness = decision.get('effectiveness_score')
+                should_notify = decision.get('should_notify', False)
+                if effectiveness is not None and effectiveness >= 0.7 and should_notify:  #hyperparameter, can tune - effectiveness threshold
+                    effective.append(decision)
+            
+            if not effective:
+                return []
+            
+            # Match only on time bucket (ignore goal bucket for preliminary selection)
+            matched = []
+            for decision in effective:
+                time_bucket = decision.get('time_since_last_nudge_bucket', '')
+                if time_bucket == current_time_bucket:
+                    matched.append(decision)
+            
+            # Sort by recency (most recent first)
+            def safe_timestamp(x):
+                try:
+                    ts = x.get('timestamp', '')
+                    if not ts:
+                        return '1970-01-01T00:00:00'
+                    return ts
+                except:
+                    return '1970-01-01T00:00:00'
+            
+            matched.sort(key=safe_timestamp, reverse=True)
+            
+            # Take top 5  #hyperparameter, can tune - max examples to use
+            return matched[:5]  #hyperparameter, can tune
+            
+        except Exception as e:
+            self.logger.warning(f"Error selecting examples (any goal): {e}")
+            return []
+    
+    def _select_examples_from_log(self, current_goal_bucket: str, current_time_bucket: str) -> List[Dict[str, Any]]:
+        """
+        Select examples from decision log using bucket matching.
+        
+        Args:
+            current_goal_bucket: Current goal alignment bucket ("high", "medium", "low", "none")
+            current_time_bucket: Current time bucket ("0-60s", "60-120s", etc.)
+            
+        Returns:
+            List of up to 5 example decisions matching the buckets
+        """
+        if not self.in_context_learning_enabled:
+            return []
+        
+        try:
+            # Filter effective examples
+            effective = []
+            for decision in self.decisions_log:
+                effectiveness = decision.get('effectiveness_score')
+                should_notify = decision.get('should_notify', False)
+                if effectiveness is not None and effectiveness >= 0.7 and should_notify:  #hyperparameter, can tune - effectiveness threshold
+                    effective.append(decision)
+            
+            if not effective:
+                return []
+            
+            # Match on buckets
+            matched = []
+            for decision in effective:
+                goal_bucket = decision.get('goal_alignment_bucket', 'none')
+                time_bucket = decision.get('time_since_last_nudge_bucket', '')
+                
+                if goal_bucket == current_goal_bucket and time_bucket == current_time_bucket:
+                    matched.append(decision)
+            
+            # Sort by recency (most recent first) - use timestamp with safe fallback
+            def safe_timestamp(x):
+                """Extract timestamp safely, defaulting to epoch if missing/invalid."""
+                try:
+                    ts = x.get('timestamp', '')
+                    if not ts:
+                        return '1970-01-01T00:00:00'
+                    return ts
+                except:
+                    return '1970-01-01T00:00:00'
+            
+            matched.sort(key=safe_timestamp, reverse=True)
+            
+            # Take top 5  #hyperparameter, can tune - max examples to use
+            return matched[:5]  #hyperparameter, can tune
+            
+        except Exception as e:
+            self.logger.warning(f"Error selecting examples from log: {e}")
+            return []
+    
+    def _format_examples_for_prompt(self, examples: List[Dict[str, Any]]) -> str:
+        """
+        Format examples for inclusion in prompt.
+        
+        Args:
+            examples: List of example decision dictionaries
+            
+        Returns:
+            Formatted string for prompt, or empty string if no examples
+        """
+        if not examples:
+            return ""
+        
+        try:
+            header = "# Learning Examples (Effective Interventions)\n\n"
+            header += "Here are examples of effective interventions from similar situations:\n\n"
+            
+            formatted = []
+            for i, ex in enumerate(examples, 1):
+                pattern = ex.get('observation_pattern_summary', 'Unknown pattern')
+                should_notify = ex.get('should_notify', False)
+                urgency = ex.get('urgency_score', 0)
+                effectiveness = ex.get('effectiveness_score', 0)
+                compliance = ex.get('compliance_percentage', 0)
+                
+                formatted.append(
+                    f"Example {i}:\n"
+                    f"- Observation: {pattern}\n"
+                    f"- Decision: should_notify={should_notify}, urgency={urgency}/10\n"
+                    f"- Effectiveness: {effectiveness} ({compliance:.0f}% compliance)"
+                )
+            
+            footer = "\n\nEach example shows: Observation Pattern → Decision → Effectiveness\n\n"
+            footer += "Learn from these examples about appropriate timing and frequency. When you see similar observation patterns, consider what worked in these examples. Reference these examples in your reasoning."
+            
+            return header + "\n\n".join(formatted) + footer
+            
+        except Exception as e:
+            self.logger.warning(f"Error formatting examples for prompt: {e}")
+            return ""
