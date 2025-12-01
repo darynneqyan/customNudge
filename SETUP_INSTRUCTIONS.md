@@ -67,7 +67,7 @@ For full functionality including window title capture:
 2. Enable permissions for:
    - **Terminal** (or your terminal app) (Go to applications --> utilities --> terminal)
    - **Python Launcher** (Go to your python folder and click rocketship emoji Python Launcher)
-3. Open **System Settings** → **Privacy & Security** → **Screen Recording** → enable the system you're running customNudge command line from.
+3. Open **System Settings** → **Privacy & Security** → **Screen Recording** → enable the system you're running customNudge command line from (like VSCode or Cursor)
 
 **Note:** The system will work without Accessibility permissions, but window titles won't be captured.
 

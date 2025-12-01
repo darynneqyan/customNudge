@@ -4,3 +4,4 @@ mkdocstrings>=0.24.0
 mkdocstrings-python>=1.7.0 
 mistune==3.0.2
 # pymdown-extensions>=10.0.0
+google-generativeai>=0.8.3
