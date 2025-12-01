@@ -25,7 +25,19 @@ class ObservationBatcher:
     async def start(self):
         """Start the batching system."""
         self._batch_ready_event = asyncio.Event() # added this line
-        self.logger.info(f"Started batcher with {self._queue.qsize()} items in queue")
+        existing = self._queue.qsize()
+        self.logger.info(f"Started batcher with {existing} items in queue")
+        
+        if existing > 0:
+            drained = 0
+            batch_num = 0
+            self.logger.warning(f"Draining {existing} stale observations from persistent queue at startup")
+            while self._queue.qsize() > 0:
+                batch = self.pop_batch(batch_size=self.max_batch_size)
+                drained += len(batch)
+                batch_num += 1
+                self.logger.debug(f"Startup drain batch {batch_num}: removed {len(batch)} observations (remaining={self._queue.qsize()})")
+            self.logger.info(f"Startup drain complete, removed {drained} stale observations")
         
         if self.should_process_batch():
             self._batch_ready_event.set()

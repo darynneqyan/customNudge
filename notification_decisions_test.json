@@ -1,0 +1,37 @@
+[
+  {
+    "timestamp": "2025-11-30T16:34:35.926143",
+    "observation_ids": [
+      8696,
+      8697,
+      8698,
+      8699,
+      8700
+    ],
+    "observation_id": null,
+    "batch_size": 5,
+    "should_notify": false,
+    "relevance_score": 3.0,
+    "goal_relevance_score": 7.0,
+    "urgency_score": 0.0,
+    "impact_score": 0.0,
+    "reasoning": "The user's primary activity across the observations is coding in VS Code and managing their calendar, which is aligned with the goal of 'fixing coding project'. While there was a switch to a messaging application in the last two observations (4 and 5), the majority of the observations (3 out of 5) still show goal-aligned behavior. According to the decision criteria, a notification is only warranted if the unaligned behavior dominates the batch.",
+    "notification_message": "",
+    "notification_type": "none",
+    "observation_content": "Here is a full transcription of all visible content from the screenshots:\n\n**Screenshot 1: Calendar**\n\n*   **Browser Top Bar:**\n    *   `Chrome`\n    *   `File Edit View History Bookmarks Profiles Tab ...",
+    "generated_propositions_count": 0,
+    "similar_propositions_count": 0,
+    "similar_observations_count": 5,
+    "blocked_reason": null,
+    "policy_version": "v1.0",
+    "time_since_last_nudge": null,
+    "time_since_last_nudge_bucket": "300s+",
+    "frequency_context": 0,
+    "goal_alignment": 0.7,
+    "goal_alignment_bucket": "high",
+    "observation_pattern_summary": "User browsing, potentially distracted",
+    "examples_available_count": 0,
+    "examples_used": [],
+    "examples_used_count": 0
+  }
+]
