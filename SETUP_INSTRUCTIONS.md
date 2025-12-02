@@ -14,7 +14,7 @@ cd /path/to/customNudge
 
 ### 2. Install Dependencies
 ```bash
-pip install pillow mss pynput shapely pyobjc-framework-Quartz openai SQLAlchemy pydantic sqlalchemy-utils python-dotenv scikit-learn aiosqlite greenlet persist-queue
+pip install pillow mss pynput shapely pyobjc-framework-Quartz openai SQLAlchemy pydantic sqlalchemy-utils python-dotenv scikit-learn aiosqlite greenlet persist-queue google-generativeai>=0.8.3
 ```
 
 ### 3. Build Swift Notifier
