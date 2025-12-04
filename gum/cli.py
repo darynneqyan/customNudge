@@ -101,7 +101,7 @@ async def main(args, user_goal=None):
         ) as gum_instance:
             try:
                 await asyncio.Future()  # run forever (Ctrl-C to stop)
-            except asyncio.CancelledError:
+            except (KeyboardInterrupt, asyncio.CancelledError):
                 print("\nShutting down...")
                 raise
 
@@ -134,10 +134,7 @@ def cli():
         else:
             print(f"Goal set: {user_goal}")
     
-    try:
-        asyncio.run(main(args, user_goal=user_goal))
-    except KeyboardInterrupt:
-        print("\nExiting...")
+    asyncio.run(main(args, user_goal=user_goal))
 
 if __name__ == '__main__':
     cli()

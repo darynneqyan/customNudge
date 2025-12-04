@@ -242,6 +242,13 @@ class gum:
         # stop observers
         for obs in self.observers:
             await obs.stop()
+        
+        # Save notification data before exiting
+        if self.notifier:
+            try:
+                self.notifier.cleanup()
+            except Exception as e:
+                self.logger.error(f"Error during notifier cleanup: {e}")
 
     async def _update_loop(self):
         """Efficiently wait for any observer to produce an Update and dispatch it.

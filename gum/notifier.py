@@ -149,8 +149,27 @@ class GUMNotifier:
             data = [asdict(ctx) for ctx in self.notification_contexts]
             with open(self.contexts_file, 'w') as f:
                 json.dump(data, f, indent=2)
+                f.flush()  # Ensure file is written to OS buffer immediately
+            self.logger.info(f"Saved notification contexts to {self.contexts_file}")
         except Exception as e:
             self.logger.error(f"Error saving notification log: {e}")
+    
+    def _save_decisions_log(self):
+        """Save notification decisions to file."""
+        try:
+            with open(self.decisions_file, 'w') as f:
+                json.dump(self.decisions_log, f, indent=2)
+                f.flush()  # Ensure file is written to OS buffer immediately
+            self.logger.info(f"Saved notification decisions to {self.decisions_file}")
+        except Exception as e:
+            self.logger.error(f"Error saving decisions log: {e}")
+    
+    def cleanup(self):
+        """Save all notification data to files. Call this on program exit."""
+        self.logger.info("Cleaning up notifier: saving all data to files...")
+        self._save_notification_log()
+        self._save_decisions_log()
+        self.logger.info("Notifier cleanup complete")
     
     def _get_learning_context(self, notification_type: str = None) -> str:
         """
