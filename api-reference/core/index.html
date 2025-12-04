@@ -1613,7 +1613,7 @@
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -1998,7 +1998,7 @@ and propositions.</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -2586,7 +2586,14 @@ and propositions.</p>
 <span class="normal"><a href="#__codelineno-0-241">241</a></span>
 <span class="normal"><a href="#__codelineno-0-242">242</a></span>
 <span class="normal"><a href="#__codelineno-0-243">243</a></span>
-<span class="normal"><a href="#__codelineno-0-244">244</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="fm">__aexit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span> <span class="n">tb</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span>
+<span class="normal"><a href="#__codelineno-0-246">246</a></span>
+<span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="fm">__aexit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span> <span class="n">tb</span><span class="p">):</span>
 </span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Async context manager exit point.</span>
 </span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>
 </span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">    Args:</span>
@@ -2599,6 +2606,13 @@ and propositions.</p>
 </span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>    <span class="c1"># stop observers</span>
 </span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a>    <span class="k">for</span> <span class="n">obs</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="p">:</span>
 </span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="k">await</span> <span class="n">obs</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a>
+</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a>    <span class="c1"># Save notification data before exiting</span>
+</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">notifier</span><span class="p">:</span>
+</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a>        <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">notifier</span><span class="o">.</span><span class="n">cleanup</span><span class="p">()</span>
+</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error during notifier cleanup: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2652,19 +2666,19 @@ and propositions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>gum/gum.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-772">772</a></span>
-<span class="normal"><a href="#__codelineno-0-773">773</a></span>
-<span class="normal"><a href="#__codelineno-0-774">774</a></span>
-<span class="normal"><a href="#__codelineno-0-775">775</a></span>
-<span class="normal"><a href="#__codelineno-0-776">776</a></span>
-<span class="normal"><a href="#__codelineno-0-777">777</a></span>
-<span class="normal"><a href="#__codelineno-0-778">778</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-772"><a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_observer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observer</span><span class="p">:</span> <span class="n">Observer</span><span class="p">):</span>
-</span><span id="__span-0-773"><a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an observer to track user behavior.</span>
-</span><span id="__span-0-774"><a id="__codelineno-0-774" name="__codelineno-0-774"></a>
-</span><span id="__span-0-775"><a id="__codelineno-0-775" name="__codelineno-0-775"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-776"><a id="__codelineno-0-776" name="__codelineno-0-776"></a><span class="sd">        observer (Observer): The observer to add.</span>
-</span><span id="__span-0-777"><a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-778"><a id="__codelineno-0-778" name="__codelineno-0-778"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">observer</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-779">779</a></span>
+<span class="normal"><a href="#__codelineno-0-780">780</a></span>
+<span class="normal"><a href="#__codelineno-0-781">781</a></span>
+<span class="normal"><a href="#__codelineno-0-782">782</a></span>
+<span class="normal"><a href="#__codelineno-0-783">783</a></span>
+<span class="normal"><a href="#__codelineno-0-784">784</a></span>
+<span class="normal"><a href="#__codelineno-0-785">785</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-779"><a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_observer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observer</span><span class="p">:</span> <span class="n">Observer</span><span class="p">):</span>
+</span><span id="__span-0-780"><a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an observer to track user behavior.</span>
+</span><span id="__span-0-781"><a id="__codelineno-0-781" name="__codelineno-0-781"></a>
+</span><span id="__span-0-782"><a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-783"><a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">        observer (Observer): The observer to add.</span>
+</span><span id="__span-0-784"><a id="__codelineno-0-784" name="__codelineno-0-784"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-785"><a id="__codelineno-0-785" name="__codelineno-0-785"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">observer</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2846,14 +2860,7 @@ and propositions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>gum/gum.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-797">797</a></span>
-<span class="normal"><a href="#__codelineno-0-798">798</a></span>
-<span class="normal"><a href="#__codelineno-0-799">799</a></span>
-<span class="normal"><a href="#__codelineno-0-800">800</a></span>
-<span class="normal"><a href="#__codelineno-0-801">801</a></span>
-<span class="normal"><a href="#__codelineno-0-802">802</a></span>
-<span class="normal"><a href="#__codelineno-0-803">803</a></span>
-<span class="normal"><a href="#__codelineno-0-804">804</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-804">804</a></span>
 <span class="normal"><a href="#__codelineno-0-805">805</a></span>
 <span class="normal"><a href="#__codelineno-0-806">806</a></span>
 <span class="normal"><a href="#__codelineno-0-807">807</a></span>
@@ -2875,36 +2882,43 @@ and propositions.</p>
 <span class="normal"><a href="#__codelineno-0-823">823</a></span>
 <span class="normal"><a href="#__codelineno-0-824">824</a></span>
 <span class="normal"><a href="#__codelineno-0-825">825</a></span>
-<span class="normal"><a href="#__codelineno-0-826">826</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-797"><a id="__codelineno-0-797" name="__codelineno-0-797"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span>
-</span><span id="__span-0-798"><a id="__codelineno-0-798" name="__codelineno-0-798"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-799"><a id="__codelineno-0-799" name="__codelineno-0-799"></a>    <span class="n">user_query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-800"><a id="__codelineno-0-800" name="__codelineno-0-800"></a>    <span class="o">*</span><span class="p">,</span>
-</span><span id="__span-0-801"><a id="__codelineno-0-801" name="__codelineno-0-801"></a>    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
-</span><span id="__span-0-802"><a id="__codelineno-0-802" name="__codelineno-0-802"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;OR&quot;</span><span class="p">,</span>
-</span><span id="__span-0-803"><a id="__codelineno-0-803" name="__codelineno-0-803"></a>    <span class="n">start_time</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-804"><a id="__codelineno-0-804" name="__codelineno-0-804"></a>    <span class="n">end_time</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-805"><a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Proposition</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
-</span><span id="__span-0-806"><a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Query the database for propositions matching the user query.</span>
-</span><span id="__span-0-807"><a id="__codelineno-0-807" name="__codelineno-0-807"></a>
-</span><span id="__span-0-808"><a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-809"><a id="__codelineno-0-809" name="__codelineno-0-809"></a><span class="sd">        user_query (str): The query string to search for.</span>
-</span><span id="__span-0-810"><a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">        limit (int, optional): Maximum number of results to return. Defaults to 3.</span>
-</span><span id="__span-0-811"><a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">        mode (str, optional): Search mode (&quot;OR&quot; or &quot;AND&quot;). Defaults to &quot;OR&quot;.</span>
-</span><span id="__span-0-812"><a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="sd">        start_time (datetime, optional): Start time for filtering results. Defaults to None.</span>
-</span><span id="__span-0-813"><a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">        end_time (datetime, optional): End time for filtering results. Defaults to None.</span>
+<span class="normal"><a href="#__codelineno-0-826">826</a></span>
+<span class="normal"><a href="#__codelineno-0-827">827</a></span>
+<span class="normal"><a href="#__codelineno-0-828">828</a></span>
+<span class="normal"><a href="#__codelineno-0-829">829</a></span>
+<span class="normal"><a href="#__codelineno-0-830">830</a></span>
+<span class="normal"><a href="#__codelineno-0-831">831</a></span>
+<span class="normal"><a href="#__codelineno-0-832">832</a></span>
+<span class="normal"><a href="#__codelineno-0-833">833</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-804"><a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span>
+</span><span id="__span-0-805"><a id="__codelineno-0-805" name="__codelineno-0-805"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-806"><a id="__codelineno-0-806" name="__codelineno-0-806"></a>    <span class="n">user_query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-807"><a id="__codelineno-0-807" name="__codelineno-0-807"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-808"><a id="__codelineno-0-808" name="__codelineno-0-808"></a>    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-0-809"><a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;OR&quot;</span><span class="p">,</span>
+</span><span id="__span-0-810"><a id="__codelineno-0-810" name="__codelineno-0-810"></a>    <span class="n">start_time</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-811"><a id="__codelineno-0-811" name="__codelineno-0-811"></a>    <span class="n">end_time</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-812"><a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Proposition</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
+</span><span id="__span-0-813"><a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Query the database for propositions matching the user query.</span>
 </span><span id="__span-0-814"><a id="__codelineno-0-814" name="__codelineno-0-814"></a>
-</span><span id="__span-0-815"><a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-816"><a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">        list[tuple[Proposition, float]]: List of tuples containing propositions and their relevance scores.</span>
-</span><span id="__span-0-817"><a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-818"><a id="__codelineno-0-818" name="__codelineno-0-818"></a>    <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-</span><span id="__span-0-819"><a id="__codelineno-0-819" name="__codelineno-0-819"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">search_propositions_bm25</span><span class="p">(</span>
-</span><span id="__span-0-820"><a id="__codelineno-0-820" name="__codelineno-0-820"></a>            <span class="n">session</span><span class="p">,</span>
-</span><span id="__span-0-821"><a id="__codelineno-0-821" name="__codelineno-0-821"></a>            <span class="n">user_query</span><span class="p">,</span>
-</span><span id="__span-0-822"><a id="__codelineno-0-822" name="__codelineno-0-822"></a>            <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span>
-</span><span id="__span-0-823"><a id="__codelineno-0-823" name="__codelineno-0-823"></a>            <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
-</span><span id="__span-0-824"><a id="__codelineno-0-824" name="__codelineno-0-824"></a>            <span class="n">start_time</span><span class="o">=</span><span class="n">start_time</span><span class="p">,</span>
-</span><span id="__span-0-825"><a id="__codelineno-0-825" name="__codelineno-0-825"></a>            <span class="n">end_time</span><span class="o">=</span><span class="n">end_time</span><span class="p">,</span>
-</span><span id="__span-0-826"><a id="__codelineno-0-826" name="__codelineno-0-826"></a>        <span class="p">)</span>
+</span><span id="__span-0-815"><a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-816"><a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">        user_query (str): The query string to search for.</span>
+</span><span id="__span-0-817"><a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">        limit (int, optional): Maximum number of results to return. Defaults to 3.</span>
+</span><span id="__span-0-818"><a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="sd">        mode (str, optional): Search mode (&quot;OR&quot; or &quot;AND&quot;). Defaults to &quot;OR&quot;.</span>
+</span><span id="__span-0-819"><a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="sd">        start_time (datetime, optional): Start time for filtering results. Defaults to None.</span>
+</span><span id="__span-0-820"><a id="__codelineno-0-820" name="__codelineno-0-820"></a><span class="sd">        end_time (datetime, optional): End time for filtering results. Defaults to None.</span>
+</span><span id="__span-0-821"><a id="__codelineno-0-821" name="__codelineno-0-821"></a>
+</span><span id="__span-0-822"><a id="__codelineno-0-822" name="__codelineno-0-822"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-823"><a id="__codelineno-0-823" name="__codelineno-0-823"></a><span class="sd">        list[tuple[Proposition, float]]: List of tuples containing propositions and their relevance scores.</span>
+</span><span id="__span-0-824"><a id="__codelineno-0-824" name="__codelineno-0-824"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-825"><a id="__codelineno-0-825" name="__codelineno-0-825"></a>    <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+</span><span id="__span-0-826"><a id="__codelineno-0-826" name="__codelineno-0-826"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">search_propositions_bm25</span><span class="p">(</span>
+</span><span id="__span-0-827"><a id="__codelineno-0-827" name="__codelineno-0-827"></a>            <span class="n">session</span><span class="p">,</span>
+</span><span id="__span-0-828"><a id="__codelineno-0-828" name="__codelineno-0-828"></a>            <span class="n">user_query</span><span class="p">,</span>
+</span><span id="__span-0-829"><a id="__codelineno-0-829" name="__codelineno-0-829"></a>            <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span>
+</span><span id="__span-0-830"><a id="__codelineno-0-830" name="__codelineno-0-830"></a>            <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
+</span><span id="__span-0-831"><a id="__codelineno-0-831" name="__codelineno-0-831"></a>            <span class="n">start_time</span><span class="o">=</span><span class="n">start_time</span><span class="p">,</span>
+</span><span id="__span-0-832"><a id="__codelineno-0-832" name="__codelineno-0-832"></a>            <span class="n">end_time</span><span class="o">=</span><span class="n">end_time</span><span class="p">,</span>
+</span><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a>        <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2958,19 +2972,19 @@ and propositions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>gum/gum.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-789">789</a></span>
-<span class="normal"><a href="#__codelineno-0-790">790</a></span>
-<span class="normal"><a href="#__codelineno-0-791">791</a></span>
-<span class="normal"><a href="#__codelineno-0-792">792</a></span>
-<span class="normal"><a href="#__codelineno-0-793">793</a></span>
-<span class="normal"><a href="#__codelineno-0-794">794</a></span>
-<span class="normal"><a href="#__codelineno-0-795">795</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-789"><a id="__codelineno-0-789" name="__codelineno-0-789"></a><span class="k">def</span><span class="w"> </span><span class="nf">register_update_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Observer</span><span class="p">,</span> <span class="n">Update</span><span class="p">],</span> <span class="kc">None</span><span class="p">]):</span>
-</span><span id="__span-0-790"><a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom update handler function.</span>
-</span><span id="__span-0-791"><a id="__codelineno-0-791" name="__codelineno-0-791"></a>
-</span><span id="__span-0-792"><a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-793"><a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="sd">        fn (Callable[[Observer, Update], None]): The handler function to register.</span>
-</span><span id="__span-0-794"><a id="__codelineno-0-794" name="__codelineno-0-794"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-795"><a id="__codelineno-0-795" name="__codelineno-0-795"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">update_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-796">796</a></span>
+<span class="normal"><a href="#__codelineno-0-797">797</a></span>
+<span class="normal"><a href="#__codelineno-0-798">798</a></span>
+<span class="normal"><a href="#__codelineno-0-799">799</a></span>
+<span class="normal"><a href="#__codelineno-0-800">800</a></span>
+<span class="normal"><a href="#__codelineno-0-801">801</a></span>
+<span class="normal"><a href="#__codelineno-0-802">802</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-796"><a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="k">def</span><span class="w"> </span><span class="nf">register_update_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Observer</span><span class="p">,</span> <span class="n">Update</span><span class="p">],</span> <span class="kc">None</span><span class="p">]):</span>
+</span><span id="__span-0-797"><a id="__codelineno-0-797" name="__codelineno-0-797"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom update handler function.</span>
+</span><span id="__span-0-798"><a id="__codelineno-0-798" name="__codelineno-0-798"></a>
+</span><span id="__span-0-799"><a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-800"><a id="__codelineno-0-800" name="__codelineno-0-800"></a><span class="sd">        fn (Callable[[Observer, Update], None]): The handler function to register.</span>
+</span><span id="__span-0-801"><a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-802"><a id="__codelineno-0-802" name="__codelineno-0-802"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">update_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3024,21 +3038,21 @@ and propositions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>gum/gum.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-780">780</a></span>
-<span class="normal"><a href="#__codelineno-0-781">781</a></span>
-<span class="normal"><a href="#__codelineno-0-782">782</a></span>
-<span class="normal"><a href="#__codelineno-0-783">783</a></span>
-<span class="normal"><a href="#__codelineno-0-784">784</a></span>
-<span class="normal"><a href="#__codelineno-0-785">785</a></span>
-<span class="normal"><a href="#__codelineno-0-786">786</a></span>
-<span class="normal"><a href="#__codelineno-0-787">787</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-780"><a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_observer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observer</span><span class="p">:</span> <span class="n">Observer</span><span class="p">):</span>
-</span><span id="__span-0-781"><a id="__codelineno-0-781" name="__codelineno-0-781"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove an observer from tracking.</span>
-</span><span id="__span-0-782"><a id="__codelineno-0-782" name="__codelineno-0-782"></a>
-</span><span id="__span-0-783"><a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-784"><a id="__codelineno-0-784" name="__codelineno-0-784"></a><span class="sd">        observer (Observer): The observer to remove.</span>
-</span><span id="__span-0-785"><a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-786"><a id="__codelineno-0-786" name="__codelineno-0-786"></a>    <span class="k">if</span> <span class="n">observer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="p">:</span>
-</span><span id="__span-0-787"><a id="__codelineno-0-787" name="__codelineno-0-787"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">observer</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-787">787</a></span>
+<span class="normal"><a href="#__codelineno-0-788">788</a></span>
+<span class="normal"><a href="#__codelineno-0-789">789</a></span>
+<span class="normal"><a href="#__codelineno-0-790">790</a></span>
+<span class="normal"><a href="#__codelineno-0-791">791</a></span>
+<span class="normal"><a href="#__codelineno-0-792">792</a></span>
+<span class="normal"><a href="#__codelineno-0-793">793</a></span>
+<span class="normal"><a href="#__codelineno-0-794">794</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-787"><a id="__codelineno-0-787" name="__codelineno-0-787"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_observer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observer</span><span class="p">:</span> <span class="n">Observer</span><span class="p">):</span>
+</span><span id="__span-0-788"><a id="__codelineno-0-788" name="__codelineno-0-788"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove an observer from tracking.</span>
+</span><span id="__span-0-789"><a id="__codelineno-0-789" name="__codelineno-0-789"></a>
+</span><span id="__span-0-790"><a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-791"><a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="sd">        observer (Observer): The observer to remove.</span>
+</span><span id="__span-0-792"><a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-793"><a id="__codelineno-0-793" name="__codelineno-0-793"></a>    <span class="k">if</span> <span class="n">observer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="p">:</span>
+</span><span id="__span-0-794"><a id="__codelineno-0-794" name="__codelineno-0-794"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">observers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">observer</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
